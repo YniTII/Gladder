@@ -1,3 +1,7 @@
+--- index.html (原始)
+
+
++++ index.html (修改后)
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -21,13 +25,13 @@
             --power-rail-color: #e74c3c;
             --active-path-color: #f39c12;
             --inactive-path-color: #95a5a6;
-            
+
             --spacing-xs: 4px;
             --spacing-sm: 8px;
             --spacing-md: 16px;
             --spacing-lg: 24px;
             --spacing-xl: 32px;
-            
+
             --element-size: 60px;
             --rung-height: 80px;
             --rail-width: 20px;
@@ -65,19 +69,6 @@
         header h1 {
             font-size: 1.5rem;
             margin-bottom: var(--spacing-sm);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: var(--spacing-sm);
-        }
-
-        .version {
-            font-size: 0.75rem;
-            background: rgba(255,255,255,0.2);
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-weight: normal;
-            white-space: nowrap;
         }
 
         .controls {
@@ -575,13 +566,6 @@
 
             header h1 {
                 font-size: 1.2rem;
-                flex-direction: column;
-                gap: 4px;
-            }
-
-            .version {
-                font-size: 0.65rem;
-                padding: 1px 6px;
             }
 
             .controls button {
@@ -656,7 +640,7 @@
 <body>
     <!-- HEADER -->
     <header>
-        <h1>🔌 Ladder Simulator <span class="version">v2.0.0</span></h1>
+        <h1>🔌 Ladder Simulator</h1>
         <div class="controls">
             <button id="btnRun" class="success">▶ Запуск</button>
             <button id="btnStop" class="danger">⏹ Стоп</button>
@@ -682,7 +666,7 @@
                     </div>
                 </div>
             </div>
-            
+
             <div class="elements-palette">
                 <div class="palette-item" data-element="no-contact">
                     <svg viewBox="0 0 100 100">
@@ -737,18 +721,18 @@
                     <div>Конвейер: <span id="conveyorStatus">СТОП</span></div>
                     <div>Датчик: <span id="sensorStatus">НЕТ</span></div>
                 </div>
-                
+
                 <div class="game-controls">
                     <button class="game-button start" id="gameStartBtn">ПУСК</button>
                     <button class="game-button stop" id="gameStopBtn">СТОП</button>
                 </div>
-                
+
                 <div class="spawn-zone">Спавн</div>
                 <div class="conveyor" id="conveyor"></div>
                 <div class="sensor" id="sensor" style="left: 50%;">Датчик</div>
                 <div class="unload-zone">Выгрузка</div>
             </div>
-            
+
             <div class="mt-2">
                 <p><strong>Инструкция:</strong></p>
                 <ul style="margin-left: 20px; font-size: 0.9rem;">
@@ -768,7 +752,7 @@
             <div id="modalContent">
                 <label for="elementName">Имя/Адрес:</label>
                 <input type="text" id="elementName" placeholder="Например: I0.0, Q0.0, Кнопка">
-                
+
                 <label for="elementType">Тип привязки:</label>
                 <select id="elementType">
                     <option value="manual">Ручное управление</option>
@@ -814,13 +798,13 @@
         // ============================================
         const LDEditor = {
             container: null,
-            
+
             init() {
                 this.container = document.getElementById('rungsContainer');
                 this.createRung();
                 this.setupEventListeners();
             },
-            
+
             createRung() {
                 const rungId = AppState.rungs.length;
                 const rung = {
@@ -830,66 +814,66 @@
                 AppState.rungs.push(rung);
                 this.renderRung(rung);
             },
-            
+
             renderRung(rung) {
                 const rungEl = document.createElement('div');
                 rungEl.className = 'rung';
                 rungEl.dataset.rungId = rung.id;
-                
+
                 rungEl.innerHTML = `
                     <span class="rung-number">${rung.id + 1}</span>
                     <div class="rung-elements" id="rung-${rung.id}">
                         <div class="wire-horizontal"></div>
                     </div>
                 `;
-                
+
                 this.container.appendChild(rungEl);
                 this.updateRungElements(rung);
             },
-            
+
             updateRungElements(rung) {
                 const container = document.getElementById(`rung-${rung.id}`);
                 const wire = container.querySelector('.wire-horizontal');
-                
+
                 // Remove old elements (except wire)
                 Array.from(container.children).forEach(child => {
                     if (!child.classList.contains('wire-horizontal')) {
                         container.removeChild(child);
                     }
                 });
-                
+
                 // Add elements
                 rung.elements.forEach((elem, index) => {
                     const elemEl = this.createElementElement(elem, index);
                     container.appendChild(elemEl);
                 });
             },
-            
+
             createElementElement(elem, index) {
                 const el = document.createElement('div');
                 el.className = 'ld-element';
                 el.dataset.elementIndex = index;
                 el.dataset.rungId = elem.rungId;
-                
+
                 if (elem.active) el.classList.add('active');
                 if (AppState.selectedElement === elem) el.classList.add('selected');
-                
-                el.innerHTML = this.getElementSVG(elem.type) + 
+
+                el.innerHTML = this.getElementSVG(elem.type) +
                     `<span class="label">${elem.name || elem.type}</span>`;
-                
+
                 el.addEventListener('click', (e) => {
                     e.stopPropagation();
                     this.handleElementClick(elem, e);
                 });
-                
+
                 el.addEventListener('dblclick', (e) => {
                     e.stopPropagation();
                     this.openConfigModal(elem);
                 });
-                
+
                 return el;
             },
-            
+
             getElementSVG(type) {
                 const svgs = {
                     'no-contact': `<svg viewBox="0 0 100 100">
@@ -921,7 +905,7 @@
                 };
                 return svgs[type] || svgs['no-contact'];
             },
-            
+
             handleElementClick(elem, event) {
                 if (event.ctrlKey || event.metaKey) {
                     // Delete element
@@ -934,7 +918,7 @@
                     }
                 }
             },
-            
+
             deleteElement(elem) {
                 const rung = AppState.rungs[elem.rungId];
                 const index = rung.elements.indexOf(elem);
@@ -943,7 +927,7 @@
                     this.updateRungElements(rung);
                 }
             },
-            
+
             updateElementView(elem) {
                 const el = document.querySelector(`[data-rung-id="${elem.rungId}"][data-element-index="${AppState.rungs[elem.rungId].elements.indexOf(elem)}"]`);
                 if (el) {
@@ -951,11 +935,11 @@
                     else el.classList.remove('active');
                 }
             },
-            
+
             addElementToRung(type, rungId = 0) {
                 const rung = AppState.rungs[rungId];
                 if (!rung) return;
-                
+
                 const elem = {
                     id: Date.now(),
                     type: type,
@@ -965,7 +949,7 @@
                     state: false,
                     active: false
                 };
-                
+
                 // Coils can only be at the end
                 if (type === 'coil') {
                     rung.elements.push(elem);
@@ -981,25 +965,25 @@
                     }
                     rung.elements.splice(insertIndex, 0, elem);
                 }
-                
+
                 this.updateRungElements(rung);
                 return elem;
             },
-            
+
             openConfigModal(elem) {
                 AppState.editingElement = elem;
                 const modal = document.getElementById('configModal');
                 const title = document.getElementById('modalTitle');
                 const nameInput = document.getElementById('elementName');
                 const typeSelect = document.getElementById('elementType');
-                
+
                 title.textContent = `Настройка: ${elem.type}`;
                 nameInput.value = elem.name || '';
                 typeSelect.value = elem.bindType || 'manual';
-                
+
                 modal.classList.add('active');
             },
-            
+
             setupEventListeners() {
                 // Palette clicks
                 document.querySelectorAll('.palette-item').forEach(item => {
@@ -1008,7 +992,7 @@
                         this.addElementToRung(type, 0);
                     });
                 });
-                
+
                 // Modal handlers
                 document.getElementById('modalSave').addEventListener('click', () => {
                     if (AppState.editingElement) {
@@ -1019,12 +1003,12 @@
                     document.getElementById('configModal').classList.remove('active');
                     AppState.editingElement = null;
                 });
-                
+
                 document.getElementById('modalCancel').addEventListener('click', () => {
                     document.getElementById('configModal').classList.remove('active');
                     AppState.editingElement = null;
                 });
-                
+
                 // Click on canvas to add rung
                 document.getElementById('ldCanvas').addEventListener('click', (e) => {
                     if (e.target.id === 'ldCanvas' || e.target.classList.contains('rungs-container')) {
@@ -1032,34 +1016,34 @@
                     }
                 });
             },
-            
+
             clear() {
                 AppState.rungs = [];
                 this.container.innerHTML = '';
                 this.createRung();
             },
-            
+
             loadPreset() {
                 this.clear();
-                
+
                 // Create preset: Start Button -> NO Contact -> Coil (Conveyor)
                 const rung = AppState.rungs[0];
-                
+
                 // Add NO contact for start button
                 const startContact = this.addElementToRung('no-contact', 0);
                 startContact.name = 'Пуск';
                 startContact.bindType = 'gameButton';
-                
+
                 // Add NC contact for stop button
                 const stopContact = this.addElementToRung('nc-contact', 0);
                 stopContact.name = 'Стоп';
                 stopContact.bindType = 'gameButton';
-                
+
                 // Add coil for conveyor
                 const conveyorCoil = this.addElementToRung('coil', 0);
                 conveyorCoil.name = 'Конвейер';
                 conveyorCoil.bindType = 'output';
-                
+
                 this.updateRungElements(rung);
             }
         };
@@ -1073,48 +1057,48 @@
             gameArea: null,
             animationFrame: null,
             lastTime: 0,
-            
+
             init() {
                 this.conveyor = document.getElementById('conveyor');
                 this.sensor = document.getElementById('sensor');
                 this.gameArea = document.getElementById('gameArea');
-                
+
                 this.setupEventListeners();
                 this.startGameLoop();
             },
-            
+
             setupEventListeners() {
                 document.getElementById('gameStartBtn').addEventListener('click', () => {
                     this.setGameButtonState('start', true);
                 });
-                
+
                 document.getElementById('gameStopBtn').addEventListener('click', () => {
                     this.setGameButtonState('stop', true);
                 });
-                
+
                 // Touch support
                 document.getElementById('gameStartBtn').addEventListener('touchstart', (e) => {
                     e.preventDefault();
                     this.setGameButtonState('start', true);
                 });
-                
+
                 document.getElementById('gameStopBtn').addEventListener('touchstart', (e) => {
                     e.preventDefault();
                     this.setGameButtonState('stop', true);
                 });
             },
-            
+
             setGameButtonState(button, pressed) {
                 const btn = document.getElementById(button === 'start' ? 'gameStartBtn' : 'gameStopBtn');
                 if (pressed) {
                     btn.classList.add('active');
                     setTimeout(() => btn.classList.remove('active'), 200);
                 }
-                
+
                 // Update LD inputs
                 const inputName = button === 'start' ? 'Пуск' : 'Стоп';
                 AppState.inputs[inputName] = pressed;
-                
+
                 // Find and update corresponding LD elements
                 AppState.rungs.forEach(rung => {
                     rung.elements.forEach(elem => {
@@ -1125,46 +1109,46 @@
                     });
                 });
             },
-            
+
             spawnWorkpiece() {
                 const now = Date.now();
                 if (now - AppState.game.lastSpawnTime < AppState.game.spawnInterval) return;
-                
+
                 const workpiece = {
                     id: Date.now(),
                     x: 20,
                     passedSensor: false,
                     element: document.createElement('div')
                 };
-                
+
                 workpiece.element.className = 'workpiece';
                 workpiece.element.textContent = Math.floor(workpiece.id % 1000);
                 this.gameArea.appendChild(workpiece.element);
-                
+
                 AppState.game.workpieces.push(workpiece);
                 AppState.game.lastSpawnTime = now;
             },
-            
+
             updateWorkpieces(deltaTime) {
                 const conveyorSpeed = 0.2; // pixels per ms
                 const gameWidth = this.gameArea.offsetWidth;
                 const unloadX = gameWidth - 100;
-                
+
                 AppState.game.workpieces.forEach((wp, index) => {
                     if (AppState.game.conveyorOn) {
                         wp.x += conveyorSpeed * deltaTime;
                     }
-                    
+
                     // Update position
                     wp.element.style.left = wp.x + 'px';
-                    
+
                     // Check sensor
                     const sensorX = gameWidth / 2 - 15;
                     if (!wp.passedSensor && wp.x + 25 > sensorX && wp.x < sensorX + 30) {
                         wp.passedSensor = true;
                         this.triggerSensor(true);
                     }
-                    
+
                     // Check unload zone
                     if (wp.x > unloadX) {
                         // Remove workpiece
@@ -1175,15 +1159,15 @@
                     }
                 });
             },
-            
+
             triggerSensor(active) {
                 AppState.game.sensorActive = active;
                 this.sensor.classList.toggle('active', active);
                 document.getElementById('sensorStatus').textContent = active ? 'АКТИВЕН' : 'НЕТ';
-                
+
                 // Update LD inputs
                 AppState.inputs['Датчик'] = active;
-                
+
                 AppState.rungs.forEach(rung => {
                     rung.elements.forEach(elem => {
                         if (elem.name === 'Датчик' && elem.bindType === 'sensor') {
@@ -1193,36 +1177,36 @@
                     });
                 });
             },
-            
+
             updateConveyor() {
                 const isOn = !!AppState.outputs['Конвейер'];
                 AppState.game.conveyorOn = isOn;
                 this.conveyor.classList.toggle('moving', isOn);
                 document.getElementById('conveyorStatus').textContent = isOn ? 'ДВИЖЕНИЕ' : 'СТОП';
-                
+
                 // Auto-spawn if conveyor is on
                 if (isOn && AppState.isRunning) {
                     this.spawnWorkpiece();
                 }
             },
-            
+
             startGameLoop() {
                 const loop = (timestamp) => {
                     if (!this.lastTime) this.lastTime = timestamp;
                     const deltaTime = timestamp - this.lastTime;
                     this.lastTime = timestamp;
-                    
+
                     if (AppState.isRunning) {
                         this.updateWorkpieces(deltaTime);
                         this.updateConveyor();
                     }
-                    
+
                     this.animationFrame = requestAnimationFrame(loop);
                 };
-                
+
                 this.animationFrame = requestAnimationFrame(loop);
             },
-            
+
             reset() {
                 AppState.game.score = 0;
                 AppState.game.workpieces.forEach(wp => wp.element.remove());
@@ -1248,31 +1232,31 @@
                         elem.active = false;
                     });
                 });
-                
+
                 // Evaluate each rung
                 AppState.rungs.forEach((rung, rungIndex) => {
                     this.evaluateRung(rung);
                 });
-                
+
                 // Update visual states
                 this.updateVisualStates();
             },
-            
+
             evaluateRung(rung) {
                 if (rung.elements.length === 0) return;
-                
+
                 let powerFlow = true;
                 let branchPower = [];
-                
+
                 for (let i = 0; i < rung.elements.length; i++) {
                     const elem = rung.elements[i];
-                    
+
                     // Handle branch points
                     if (elem.type === 'branch-start') {
                         branchPower.push(powerFlow);
                         continue;
                     }
-                    
+
                     if (elem.type === 'branch-end') {
                         if (branchPower.length > 0) {
                             powerFlow = powerFlow || branchPower.pop();
@@ -1280,26 +1264,26 @@
                         elem.active = powerFlow;
                         continue;
                     }
-                    
+
                     // Evaluate contact/coil
                     let elemState = elem.state;
-                    
+
                     // For NC contacts, invert the state
                     if (elem.type === 'nc-contact') {
                         elemState = !elemState;
                     }
-                    
+
                     // Power flows through if element is active (for contacts)
                     if (elem.type === 'no-contact' || elem.type === 'nc-contact') {
                         powerFlow = powerFlow && elemState;
                         elem.active = powerFlow;
                     }
-                    
+
                     // Coils are outputs
                     if (elem.type === 'coil') {
                         elem.active = powerFlow;
                         elem.state = powerFlow; // Set coil state
-                        
+
                         // Update output
                         if (elem.bindType === 'output') {
                             AppState.outputs[elem.name] = powerFlow;
@@ -1307,7 +1291,7 @@
                     }
                 }
             },
-            
+
             updateVisualStates() {
                 AppState.rungs.forEach(rung => {
                     const rungEl = document.querySelector(`[data-rung-id="${rung.id}"]`);
@@ -1315,13 +1299,13 @@
                         // Check if any element in rung is active
                         const hasActive = rung.elements.some(e => e.active);
                         rungEl.classList.toggle('active', hasActive);
-                        
+
                         // Update wire color
                         const wire = rungEl.querySelector('.wire-horizontal');
                         if (wire) {
                             wire.classList.toggle('active', hasActive);
                         }
-                        
+
                         // Update element visuals
                         rung.elements.forEach((elem, index) => {
                             const elemEl = rungEl.querySelector(`[data-element-index="${index}"]`);
@@ -1339,50 +1323,50 @@
         // ============================================
         const Integrator = {
             logicInterval: null,
-            
+
             start() {
                 AppState.isRunning = true;
                 document.getElementById('btnRun').disabled = true;
                 document.getElementById('btnStop').disabled = false;
-                
+
                 this.logicInterval = setInterval(() => {
                     this.runLogicCycle();
                 }, AppState.logicInterval);
             },
-            
+
             stop() {
                 AppState.isRunning = false;
                 document.getElementById('btnRun').disabled = false;
                 document.getElementById('btnStop').disabled = true;
-                
+
                 if (this.logicInterval) {
                     clearInterval(this.logicInterval);
                     this.logicInterval = null;
                 }
             },
-            
+
             runLogicCycle() {
                 // 1. Collect input states from LD elements
                 AppState.rungs.forEach(rung => {
                     rung.elements.forEach(elem => {
-                        if ((elem.type === 'no-contact' || elem.type === 'nc-contact') && 
+                        if ((elem.type === 'no-contact' || elem.type === 'nc-contact') &&
                             elem.bindType === 'manual') {
                             AppState.inputs[elem.name] = elem.state;
                         }
                     });
                 });
-                
+
                 // 2. Evaluate LD logic
                 LDEvaluator.evaluate();
-                
+
                 // 3. Apply outputs to game
                 GameEngine.updateConveyor();
             },
-            
+
             reset() {
                 this.stop();
                 GameEngine.reset();
-                
+
                 // Reset all LD elements
                 AppState.rungs.forEach(rung => {
                     rung.elements.forEach(elem => {
@@ -1392,7 +1376,7 @@
                         elem.active = false;
                     });
                 });
-                
+
                 LDEvaluator.updateVisualStates();
                 AppState.inputs = {};
                 AppState.outputs = {};
@@ -1407,27 +1391,27 @@
                 document.getElementById('btnRun').addEventListener('click', () => {
                     Integrator.start();
                 });
-                
+
                 document.getElementById('btnStop').addEventListener('click', () => {
                     Integrator.stop();
                 });
-                
+
                 document.getElementById('btnReset').addEventListener('click', () => {
                     Integrator.reset();
                 });
-                
+
                 document.getElementById('btnClear').addEventListener('click', () => {
                     Integrator.stop();
                     LDEditor.clear();
                     GameEngine.reset();
                 });
-                
+
                 document.getElementById('btnPreset').addEventListener('click', () => {
                     Integrator.stop();
                     LDEditor.loadPreset();
                     GameEngine.reset();
                 });
-                
+
                 // Disable stop button initially
                 document.getElementById('btnStop').disabled = true;
             }
@@ -1440,10 +1424,10 @@
             LDEditor.init();
             GameEngine.init();
             UIController.init();
-            
+
             // Load preset by default
             LDEditor.loadPreset();
-            
+
             console.log('Ladder Simulator initialized!');
             console.log('Controls:');
             console.log('- Click palette item to add element');

@@ -1,0 +1,2919 @@
+<!-- ЧАСТЬ 1/3: index.html с исправленной архитектурой и всеми функциями -->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ladder Simulator</title>
+    <style>
+        :root {
+            --rail-color: #333;
+            --rail-width: 6px;
+            --contact-color: #666;
+            --coil-color: #cc0000;
+            --active-color: #0f0;
+            --inactive-color: #ccc;
+            --branch-color: #888;
+            --grid-bg: #f0f0f0;
+            --editor-bg: #fff;
+            --game-bg: rgba(26, 26, 46, 0.95);
+            --control-bg: #f5f5f5;
+            --text-color: #333;
+            --border-color: #ddd;
+            --debug-panel-bg: rgba(0,0,0,0.8);
+            --debug-text-color: #fff;
+            --grid-cell-size: 50px;
+            --header-height: 60px;
+            --toolbar-height: 60px;
+            --win-x: 0px;
+            --win-y: 0px;
+            --field-zoom: 1;
+            --field-pan-x: 0px;
+            --field-pan-y: 0px;
+            --obj-x: 0px;
+            --obj-y: 0px;
+        }
+
+        * {
+            box-sizing: border-box;
+            touch-action: manipulation;
+            user-select: none;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            background-color: var(--grid-bg);
+            overflow-x: hidden;
+            height: 100dvh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            height: var(--header-height);
+            background-color: #333;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            z-index: 1000;
+            flex-shrink: 0;
+        }
+
+        .header-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 8px 12px;
+            border: 1px solid #ccc;
+            background-color: #fff;
+            cursor: pointer;
+            border-radius: 4px;
+            min-height: 44px;
+            min-width: 44px;
+            font-size: 14px;
+        }
+
+        .btn:hover {
+            background-color: #e6e6e6;
+        }
+
+        .btn.active {
+            background-color: #007bff;
+            color: white;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-left: 10px;
+        }
+
+        .status-running {
+            background-color: #28a745;
+        }
+
+        .status-stopped {
+            background-color: #dc3545;
+        }
+
+        .content {
+            flex: 1 1 auto;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        .editor-section {
+            flex: 1;
+            background-color: var(--editor-bg);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .toolbar {
+            background-color: var(--control-bg);
+            padding: 10px;
+            z-index: 100;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            border-bottom: 1px solid var(--border-color);
+            flex-shrink: 0;
+        }
+
+        .element-btn {
+            width: 60px;
+            height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #ccc;
+            background-color: white;
+            cursor: grab;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+
+        .element-btn:hover {
+            background-color: #e6e6e6;
+        }
+
+        .element-btn.dragging {
+            opacity: 0.5;
+            cursor: grabbing;
+        }
+
+        .element-btn[data-type="branch"] {
+            width: 100px;
+        }
+
+        .editor-grid {
+            flex: 1;
+            overflow-y: auto;
+            position: relative;
+        }
+
+        .rung-container {
+            margin: 10px 0;
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            background-color: #fafafa;
+            position: relative;
+        }
+
+        .rung-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+
+        .branch-container {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+            position: relative;
+        }
+
+        .rail {
+            width: 4px;
+            background-color: var(--rail-color);
+        }
+
+        .branch-content {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(var(--grid-cell-size), 1fr));
+            gap: 0;
+            margin: 0 10px;
+            flex: 1;
+        }
+
+        .grid-cell {
+            width: var(--grid-cell-size);
+            height: 40px;
+            border: 1px solid #eee;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            position: relative;
+            transition: background-color 0.2s;
+        }
+
+        .grid-cell:hover {
+            background-color: #e6f3ff;
+        }
+
+        .grid-cell.droppable {
+            background-color: #d4edda;
+            border: 2px solid #28a745;
+        }
+
+        .grid-cell.no-drop {
+            background-color: #f8d7da;
+            border: 2px solid #dc3545;
+        }
+
+        .element {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            cursor: move;
+        }
+
+        .element.contact-normally-open::before {
+            content: '─┤├─';
+            color: var(--contact-color);
+            font-size: 16px;
+        }
+
+        .element.contact-normally-closed::before {
+            content: '─┤/├─';
+            color: var(--contact-color);
+            font-size: 16px;
+        }
+
+        .element.coil::before {
+            content: '─( )─';
+            color: var(--coil-color);
+            font-size: 16px;
+        }
+
+        .element.branch::before {
+            content: '─║─';
+            color: var(--branch-color);
+            font-size: 16px;
+        }
+
+        .element.active {
+            background-color: var(--active-color);
+            opacity: 0.7;
+        }
+
+        .element.override {
+            background-color: #ffc107;
+            opacity: 0.7;
+        }
+
+        .element.deleting {
+            animation: shake 0.5s ease-in-out;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        .element-delete-btn {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            width: 16px;
+            height: 16px;
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            font-size: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .element:hover .element-delete-btn {
+            opacity: 1;
+        }
+
+        .element-tag {
+            position: absolute;
+            top: -15px;
+            left: 0;
+            font-size: 10px;
+            background-color: rgba(0,0,0,0.7);
+            color: white;
+            padding: 1px 3px;
+            border-radius: 2px;
+            white-space: nowrap;
+        }
+
+        .game-window {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 450px;
+            height: 400px;
+            background-color: var(--game-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transform: translate(var(--win-x), var(--win-y));
+            will-change: transform;
+        }
+
+        .game-header {
+            height: 32px;
+            background-color: #333;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 10px;
+            cursor: move;
+            user-select: none;
+            flex-shrink: 0;
+        }
+
+        .game-viewport {
+            flex: 1;
+            position: relative;
+            top: 0;
+            left: 0;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: #111;
+            touch-action: none;
+        }
+
+        .game-field {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 1200px;
+            height: 800px;
+            margin: 0;
+            padding: 0;
+            transform-origin: 0 0;
+            transform: translate(var(--field-pan-x), var(--field-pan-y)) scale(var(--field-zoom));
+            transition: transform 0.05s linear;
+        }
+
+        .game-object {
+            position: absolute;
+            top: 0;
+            left: 0;
+            margin: 0;
+            padding: 0;
+            display: block;
+            user-select: none;
+            cursor: move;
+            transition: box-shadow 0.2s;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 12px;
+            font-weight: 500;
+            min-width: 20px;
+            min-height: 20px;
+        }
+
+        .game-object.type-conveyor {
+            height: 24px;
+            background: linear-gradient(90deg, #2d2d3d, #444455);
+            border: 2px solid #666;
+            border-top: 2px dashed #888;
+        }
+
+        .game-object.type-conveyor.running {
+            background: linear-gradient(90deg, #2d2d3d, #444455);
+            animation: conveyorMove 0.5s linear infinite;
+        }
+
+        .game-object.type-conveyor.running.inverted {
+            animation-direction: reverse;
+        }
+
+        @keyframes conveyorMove {
+            0% { background-position: 0 0; }
+            100% { background-position: 40px 0; }
+        }
+
+        .game-object.type-conveyor.inverted {
+            background: linear-gradient(90deg, #8b0000, #cc0000);
+        }
+
+        .game-object.type-spawn {
+            background-color: #28a745;
+            width: 80px;
+            height: 40px;
+        }
+
+        .game-object.type-sensor {
+            background-color: #6c757d;
+            width: 40px;
+            height: 20px;
+        }
+
+        .game-object.type-unload {
+            height: 30px;
+            background: #8b0000;
+            border: 2px solid #ff4444;
+            width: 80px;
+        }
+
+        .game-object.type-button {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            border: 2px solid #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 600;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+            cursor: pointer;
+            transition: transform 0.1s, box-shadow 0.1s;
+        }
+
+        .game-object.type-button.pressed {
+            transform: scale(0.92);
+            box-shadow: inset 0 2px 8px rgba(0,0,0,0.5);
+        }
+
+        .game-object.dragging {
+            z-index: 10;
+            cursor: grabbing;
+        }
+
+        .workpiece {
+            position: absolute;
+            width: 30px;
+            height: 20px;
+            background-color: #4169E1;
+            border-radius: 2px;
+            will-change: transform;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .workpiece-debug {
+            position: absolute;
+            top: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 10px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 2px 4px;
+            border-radius: 2px;
+            white-space: nowrap;
+            pointer-events: none;
+        }
+
+        .game-tag-label {
+            position: absolute;
+            top: -22px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 10px;
+            background: rgba(0,0,0,0.7);
+            color: #fff;
+            padding: 2px 6px;
+            border-radius: 4px;
+            white-space: nowrap;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .game-controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            display: flex;
+            gap: 5px;
+            z-index: 20;
+        }
+
+        .debug-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: none;
+        }
+
+        .debug-layer.visible {
+            display: block;
+        }
+
+        .debug-box {
+            position: absolute;
+            border: 1px solid cyan;
+            background-color: rgba(0, 255, 255, 0.1);
+        }
+
+        .game-properties-popup {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: white;
+            border: 2px solid #444;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 2000;
+            min-width: 350px;
+            max-width: 500px;
+        }
+
+        .game-properties-popup h3 {
+            margin: 0 0 15px 0;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 20px;
+        }
+
+        .delete-element-btn {
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-bottom: 10px;
+            width: 100%;
+        }
+
+        .delete-element-btn:hover {
+            background-color: #c82333;
+        }
+
+        .palette-panel {
+            position: fixed;
+            top: var(--header-height);
+            left: 0;
+            width: 200px;
+            height: calc(100dvh - var(--header-height));
+            background-color: white;
+            border-right: 2px solid var(--border-color);
+            z-index: 999;
+            display: flex;
+            flex-direction: column;
+            transform: translateX(-100%);
+            transition: transform 0.3s ease;
+        }
+
+        .palette-panel.open {
+            transform: translateX(0);
+        }
+
+        .palette-header {
+            padding: 15px;
+            background-color: var(--control-bg);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .palette-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        .game-object-btn {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            background-color: #f0f0f0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .game-object-btn:hover {
+            background-color: #e6e6e6;
+        }
+
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0,0,0,0.5);
+            z-index: 2000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            min-width: 400px;
+            max-width: 600px;
+        }
+
+        .tags-manager {
+            position: fixed;
+            top: var(--header-height);
+            right: 0;
+            width: 300px;
+            height: calc(100dvh - var(--header-height));
+            background-color: white;
+            border-left: 2px solid var(--border-color);
+            z-index: 999;
+            display: flex;
+            flex-direction: column;
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+        }
+
+        .tags-manager.open {
+            transform: translateX(0);
+        }
+
+        .tags-header {
+            padding: 15px;
+            background-color: var(--control-bg);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .tags-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        .tag-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px;
+            border-bottom: 1px solid var(--border-color);
+            cursor: pointer;
+        }
+
+        .tag-row:hover {
+            background-color: #f5f5f5;
+        }
+
+        .tag-info {
+            flex: 1;
+        }
+
+        .tag-actions {
+            display: flex;
+            gap: 5px;
+        }
+
+        .tag-value {
+            font-weight: bold;
+        }
+
+        .tag-value.true {
+            color: #28a745;
+        }
+
+        .tag-value.false {
+            color: #dc3545;
+        }
+
+        .tag-value.override {
+            color: #ffc107;
+            font-weight: bold;
+        }
+
+        .debug-panel {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            background-color: var(--debug-panel-bg);
+            color: var(--debug-text-color);
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            max-width: 300px;
+            z-index: 1000;
+        }
+
+        .debug-panel h4 {
+            margin: 0 0 5px 0;
+            color: white;
+        }
+
+        .debug-item {
+            margin: 2px 0;
+        }
+
+        .tag-binding-popup {
+            position: absolute;
+            background-color: white;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            z-index: 1001;
+            min-width: 200px;
+        }
+
+        .tag-binding-popup input {
+            width: 100%;
+            padding: 5px;
+            margin-bottom: 5px;
+            border: 1px solid #ccc;
+            border-radius: 2px;
+        }
+
+        .tag-binding-popup button {
+            width: 48%;
+            padding: 5px;
+            margin: 2px;
+        }
+
+        @media (max-width: 768px) {
+            .game-window {
+                width: 90vw;
+                height: 40vh;
+                top: auto;
+                bottom: 10px;
+                right: 5%;
+                left: auto;
+            }
+
+            .element-btn {
+                width: 50px;
+                height: 44px;
+                font-size: 10px;
+            }
+
+            .element-btn[data-type="branch"] {
+                width: 80px;
+            }
+
+            .grid-cell {
+                width: 40px;
+                font-size: 12px;
+            }
+
+            .tags-manager {
+                width: 100%;
+                transform: translateY(100%);
+            }
+
+            .tags-manager.open {
+                transform: translateY(0);
+                top: var(--header-height);
+                height: 50dvh;
+            }
+
+            .palette-panel {
+                width: 100%;
+                height: 50vh;
+                transform: translateY(100%);
+            }
+
+            .palette-panel.open {
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-title">
+            <h2>Ladder Simulator</h2>
+            <span>Симуляция: <span class="status-indicator status-stopped"></span></span>
+        </div>
+        <div class="header-controls">
+            <button id="startBtn" class="btn">▶ START</button>
+            <span>FPS: <span id="fpsDisplay">0</span></span>
+            <button id="tagsManagerBtn" class="btn">🏷️ Теги</button>
+            <button id="gamePaletteBtn" class="btn">🎮 Элементы</button>
+            <button id="debugOverlayBtn" class="btn">🔍 Debug</button>
+        </div>
+    </div>
+
+    <div class="content">
+        <!-- LD-редактор -->
+        <div class="editor-section" id="editorSection">
+            <div class="toolbar" id="elementToolbar">
+                <div class="element-btn" draggable="true" data-type="contact-normally-open">НО</div>
+                <div class="element-btn" draggable="true" data-type="contact-normally-closed">НЗ</div>
+                <div class="element-btn" draggable="true" data-type="coil">Катушка</div>
+                <div class="element-btn" draggable="true" data-type="branch">Параллельная ветка</div>
+                <button id="addRungBtn" class="btn">+ Линия</button>
+                <button id="clearBtn" class="btn">Очистить</button>
+            </div>
+            
+            <div class="editor-grid" id="editorGrid">
+                <!-- Содержимое будет генерироваться динамически -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Палитра игровых элементов -->
+    <div class="palette-panel" id="gamePalette">
+        <div class="palette-header">
+            <h3>Игровые элементы</h3>
+            <button id="closePaletteBtn" class="btn">×</button>
+        </div>
+        <div class="palette-body">
+            <button class="game-object-btn" data-type="conveyor">Конвейер</button>
+            <button class="game-object-btn" data-type="spawn">Спавн</button>
+            <button class="game-object-btn" data-type="sensor">Датчик</button>
+            <button class="game-object-btn" data-type="unload">Выгрузка</button>
+            <button class="game-object-btn" data-type="button">Кнопка</button>
+        </div>
+    </div>
+
+    <!-- Плавающее игровое окно -->
+    <div class="game-window" id="gameWindow">
+        <div class="game-header" id="gameHeader">
+            <span>Игровое поле</span>
+            <div>
+                <button id="gameCollapseBtn" class="btn" style="padding: 2px 8px; min-width: auto;">−</button>
+                <button id="gameCloseBtn" class="btn" style="padding: 2px 8px; min-width: auto;">×</button>
+            </div>
+        </div>
+        <div class="game-viewport" id="gameViewport">
+            <div class="game-field" id="gameField">
+                <!-- Игровые объекты будут добавляться сюда -->
+            </div>
+            <div class="debug-layer" id="debugLayer">
+                <!-- Debug-оверлей будет добавляться сюда -->
+            </div>
+            <div class="game-controls">
+                <button id="zoomInBtn" class="btn" style="padding: 5px; min-width: auto;">+</button>
+                <button id="zoomOutBtn" class="btn" style="padding: 5px; min-width: auto;">-</button>
+                <button id="resetViewBtn" class="btn" style="padding: 5px; min-width: auto;">⌂</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Менеджер тегов -->
+    <div class="tags-manager" id="tagsManager">
+        <div class="tags-header">
+            <h3>Менеджер тегов</h3>
+            <button id="closeTagsBtn" class="btn">×</button>
+        </div>
+        <div class="tags-body" id="tagsBody">
+            <!-- Содержимое будет генерироваться динамически -->
+        </div>
+    </div>
+
+    <!-- Модальное окно свойств элемента -->
+    <div class="modal" id="elementPropertiesModal" style="display: none;">
+        <div class="modal-content">
+            <h3>Свойства элемента</h3>
+            <div class="form-group">
+                <label for="elementTag">Тег (адрес):</label>
+                <input type="text" id="elementTag" placeholder="Введите тег (например: I_START)">
+            </div>
+            <div class="form-group">
+                <label for="elementType">Тип:</label>
+                <select id="elementType">
+                    <option value="I">Вход (I)</option>
+                    <option value="Q">Выход (Q)</option>
+                    <option value="M">Меркер (M)</option>
+                    <option value="">Нет привязки</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="elementComment">Комментарий:</label>
+                <input type="text" id="elementComment" placeholder="Описание элемента">
+            </div>
+            <div class="form-actions">
+                <button id="cancelElementBtn" class="btn">Отмена</button>
+                <button id="saveElementBtn" class="btn" style="background-color: #28a745; color: white;">Сохранить</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Попап редактирования игрового объекта -->
+    <div class="modal" id="gameObjectPropertiesModal" style="display: none;">
+        <div class="modal-content">
+            <h3>Свойства игрового объекта</h3>
+            <div class="form-group">
+                <label for="gameObjectTag">Тег (адрес):</label>
+                <input type="text" id="gameObjectTag" placeholder="Введите тег (например: Q_CONVEYOR_1)">
+            </div>
+            <div class="form-group">
+                <label for="gameObjectName">Имя/Метка:</label>
+                <input type="text" id="gameObjectName" placeholder="Введите имя">
+            </div>
+            <div class="form-group" id="conveyorInvertGroup" style="display: none;">
+                <label for="gameObjectInvertTag">Тег инверсии:</label>
+                <input type="text" id="gameObjectInvertTag" placeholder="Введите тег инверсии (например: Q_INV_1)">
+            </div>
+            <div class="form-group" id="buttonTypeGroup" style="display: none;">
+                <label for="gameObjectButtonType">Тип кнопки:</label>
+                <select id="gameObjectButtonType">
+                    <option value="momentary">Без фиксации</option>
+                    <option value="latched">С фиксацией</option>
+                </select>
+            </div>
+            <div class="form-group" id="buttonColorGroup" style="display: none;">
+                <label for="gameObjectButtonColor">Цвет кнопки:</label>
+                <input type="color" id="gameObjectButtonColor" value="#3b82f6">
+            </div>
+            <div class="form-group">
+                <label for="gameObjectComment">Комментарий:</label>
+                <input type="text" id="gameObjectComment" placeholder="Описание">
+            </div>
+			<!-- Группа для спавнера: Материал -->
+<div class="form-group" id="spawnerMaterialGroup" style="display: none;">
+    <label for="spawnerMaterial">Материал заготовки:</label>
+    <select id="spawnerMaterial">
+        <option value="metal">Металл</option>
+        <option value="plastic">Пластик</option>
+    </select>
+</div>
+
+<!-- Группа для датчика: Тип -->
+<div class="form-group" id="sensorTypeGroup" style="display: none;">
+    <label for="sensorType">Тип датчика:</label>
+    <select id="sensorType">
+        <option value="optical">Оптический</option>
+        <option value="inductive">Индуктивный</option>
+    </select>
+</div>
+            <div class="form-actions">
+                <button id="cancelGameObjectBtn" class="btn">Отмена</button>
+                <button id="saveGameObjectBtn" class="btn" style="background-color: #28a745; color: white;">Сохранить</button>
+            </div>
+            <button id="deleteGameObjectBtn" class="delete-element-btn">🗑 Удалить элемент</button>
+        </div>
+    </div>
+
+    <div class="debug-panel" id="debugPanel">
+        <h4>Отладка</h4>
+        <div id="debugContent"></div>
+    </div>
+
+    <script>
+        // Архитектура TagRegistry - единый источник истины для всех тегов
+        class TagRegistry {
+            constructor() {
+                this.tags = new Map(); // tag -> { baseValue, effectiveValue, isOverridden, overrideValue, type, comment, prevEffective, subscribers }
+                this.listeners = []; // Функции, которые вызываются при изменении тега
+            }
+
+            register(tag, type, defaultValue = false, comment = '') {
+                if (!this.tags.has(tag)) {
+                    this.tags.set(tag, {
+                        baseValue: defaultValue,
+                        effectiveValue: defaultValue,
+                        isOverridden: false,
+                        overrideValue: defaultValue,
+                        type: type,
+                        comment: comment,
+                        prevEffective: defaultValue,
+                        subscribers: []
+                    });
+                }
+            }
+
+            subscribe(tag, callback) {
+                if (this.tags.has(tag)) {
+                    const tagData = this.tags.get(tag);
+                    tagData.subscribers.push(callback);
+                }
+            }
+
+            unsubscribe(tag, callback) {
+                if (this.tags.has(tag)) {
+                    const tagData = this.tags.get(tag);
+                    const index = tagData.subscribers.indexOf(callback);
+                    if (index > -1) {
+                        tagData.subscribers.splice(index, 1);
+                    }
+                }
+            }
+
+            setValue(tag, value) {
+                if (this.tags.has(tag)) {
+                    const tagData = this.tags.get(tag);
+                    tagData.baseValue = value;
+                    
+                    // Если override активен, не меняем effectiveValue
+                    if (!tagData.isOverridden) {
+                        tagData.effectiveValue = value;
+                    }
+                    
+                    this.notifyChange(tag);
+                }
+            }
+
+            setOverride(tag, isActive, overrideValue = null) {
+                if (this.tags.has(tag)) {
+                    const tagData = this.tags.get(tag);
+                    
+                    if (isActive) {
+                        if (overrideValue !== null) {
+                            tagData.overrideValue = overrideValue;
+                        } else {
+                            tagData.overrideValue = !tagData.effectiveValue; // Toggle
+                        }
+                        tagData.isOverridden = true;
+                        tagData.effectiveValue = tagData.overrideValue;
+                    } else {
+                        tagData.isOverridden = false;
+                        tagData.effectiveValue = tagData.baseValue; // Возвращаем к базовому значению
+                    }
+                    
+                    this.notifyChange(tag);
+                }
+            }
+
+            toggle(tag) {
+                const tagData = this.getTagInfo(tag);
+                if (tagData) {
+                    this.setOverride(tag, !tagData.isOverridden, !tagData.effectiveValue);
+                }
+            }
+
+            getValue(tag) {
+                if (this.tags.has(tag)) {
+                    return this.tags.get(tag).effectiveValue;
+                }
+                return false;
+            }
+
+            getTagInfo(tag) {
+                if (this.tags.has(tag)) {
+                    return this.tags.get(tag);
+                }
+                return null;
+            }
+
+            detectRisingEdge(tag) {
+                const tagData = this.tags.get(tag);
+                if (tagData) {
+                    const risingEdge = !tagData.prevEffective && tagData.effectiveValue;
+                    tagData.prevEffective = tagData.effectiveValue;
+                    return risingEdge;
+                }
+                return false;
+            }
+
+            addChangeListener(listener) {
+                this.listeners.push(listener);
+            }
+
+            notifyChange(tag) {
+                // Уведомляем подписчиков конкретного тега
+                if (this.tags.has(tag)) {
+                    const tagData = this.tags.get(tag);
+                    tagData.subscribers.forEach(callback => callback(tag, tagData.effectiveValue));
+                }
+                
+                // Уведомляем общих слушателей
+                this.listeners.forEach(listener => listener(tag));
+            }
+        }
+
+        // Глобальное состояние приложения
+        const appState = {
+            simulationRunning: false,
+            draggedElement: null,
+            draggedType: null,
+            editingElement: null,
+            rungs: [],
+            tagRegistry: new TagRegistry(),
+            gameObjects: {
+                window: {
+                    x: 20,
+                    y: 20,
+                    width: 450,
+                    height: 400,
+                    collapsed: false
+                },
+                field: {
+                    width: 1200, // Логическая ширина поля
+                    height: 800, // Логическая высота поля
+                    zoom: 1,
+                    panX: 0,
+                    panY: 0
+                },
+                elements: [], // Игровые объекты с координатами
+                workpieces: [], // Заготовки с физикой
+                conveyorSpeed: 150, // px/s
+                gravity: 800, // px/s²
+                friction: 0.95, // Коэффициент трения
+                counters: {
+                    unloadCount: 0
+                },
+                previousValues: {
+                    spawn: {}
+                }
+            },
+            ui: {
+                windowX: 0,
+                windowY: 0,
+                dragOffset: {
+                    x: 0,
+                    y: 0
+                },
+                zoom: 1,
+                panX: 0,
+                panY: 0,
+                debugVisible: false
+            },
+            physics: {
+                accumulator: 0,
+                lastTime: 0,
+                step: 1/60 // 60 FPS
+            },
+            debugInfo: {
+                fps: 0,
+                lastFrameTime: 0
+            },
+            dragState: {
+                isDragging: false,
+                draggedElement: null,
+                originalPosition: null,
+                startX: 0,
+                startY: 0,
+                startElementX: 0,
+                startElementY: 0,
+                threshold: 5 // Порог для различения клика и драга
+            }
+        };
+
+        // Инициализация структуры схемы
+        function initializeSchema() {
+            // Регистрируем теги
+            appState.tagRegistry.register('I_START', 'I', false, 'Кнопка Пуск');
+            appState.tagRegistry.register('I_STOP', 'I', true, 'Кнопка Стоп');
+            appState.tagRegistry.register('X_SENSOR', 'I', false, 'Датчик на конвейере');
+            appState.tagRegistry.register('Q_CONVEYOR', 'Q', false, 'Включение конвейера');
+            appState.tagRegistry.register('Q_INV_1', 'Q', false, 'Инверсия конвейера 1');
+            appState.tagRegistry.register('Q_SPAWN', 'Q', false, 'Спавн заготовки');
+            appState.tagRegistry.register('Q_UNLOAD', 'Q', false, 'Выгрузка');
+
+            appState.rungs.push({
+                id: Date.now(),
+                branches: [{
+                    id: Date.now() + 1,
+                    startIndex: 0,
+                    elements: [
+                        { 
+                            id: Date.now() + 2, 
+                            type: 'contact-normally-open', 
+                            row: 0, 
+                            col: 0,
+                            tag: 'I_START',
+                            state: false,
+                            comment: 'Кнопка Пуск'
+                        },
+                        { 
+                            id: Date.now() + 3, 
+                            type: 'contact-normally-closed', 
+                            row: 0, 
+                            col: 1,
+                            tag: 'I_STOP',
+                            state: true,
+                            comment: 'Кнопка Стоп'
+                        },
+                        { 
+                            id: Date.now() + 4, 
+                            type: 'coil', 
+                            row: 0, 
+                            col: 2,
+                            tag: 'Q_CONVEYOR',
+                            state: false,
+                            comment: 'Конвейер'
+                        }
+                    ]
+                }]
+            });
+        }
+
+        // Инициализация игровых объектов
+        function initGameObjects() {
+            // Создаём дефолтные игровые объекты с безопасными координатами внутри логического поля
+            appState.gameObjects.elements = [
+                {
+                    id: 'spawn_1',
+                    type: 'spawn',
+                    x: 100,
+                    y: 100,
+                    width: 80,
+                    height: 40,
+                    tag: 'Q_SPAWN',
+                    name: 'Спавн',
+                    comment: 'Зона спавна заготовок',
+                    material: 'metal'
+                },
+                {
+                    id: 'conveyor_1',
+                    type: 'conveyor',
+                    x: 100,
+                    y: 400,
+                    width: 300,
+                    height: 24,
+                    tag: 'Q_CONVEYOR',
+                    invertTag: 'Q_INV_1', // Второй тег для инверсии
+                    name: 'Конвейер',
+                    comment: 'Основной конвейер'
+                },
+                {
+                    id: 'sensor_1',
+                    type: 'sensor',
+                    x: 250,
+                    y: 390,
+                    width: 40,
+                    height: 20,
+                    tag: 'X_SENSOR',
+                    name: 'Сенсор',
+                    comment: 'Датчик на конвейере',
+                    sensorType: 'optical'
+                },
+                {
+                    id: 'unload_1',
+                    type: 'unload',
+                    x: 450,
+                    y: 390,
+                    width: 80,
+                    height: 30,
+                    tag: 'Q_UNLOAD',
+                    name: 'Выгрузка',
+                    comment: 'Зона выгрузки'
+                },
+                {
+                    id: 'button_1',
+                    type: 'button',
+                    x: 300,
+                    y: 100,
+                    width: 48,
+                    height: 48,
+                    tag: 'I_START',
+                    name: 'Пуск',
+                    buttonType: 'momentary',
+                    color: '#3b82f6',
+                    comment: 'Кнопка пуск'
+                }
+            ];
+
+            // Создаём DOM-элементы для всех объектов
+            syncGameObjectsToDOM();
+        }
+
+        // Синхронизация игровых объектов с DOM
+        function syncGameObjectsToDOM() {
+            const gameField = document.getElementById('gameField');
+gameField.innerHTML = '';
+            // Создаём контейнер для заготовок
+const workpiecesContainer = document.createElement('div');
+workpiecesContainer.id = 'workpiecesContainer';
+workpiecesContainer.style.position = 'absolute';
+workpiecesContainer.style.top = '0';
+workpiecesContainer.style.left = '0';
+workpiecesContainer.style.width = '100%';
+workpiecesContainer.style.height = '100%';
+workpiecesContainer.style.pointerEvents = 'none';
+gameField.appendChild(workpiecesContainer);
+
+// Создаём DOM-элементы для каждого игрового объекта
+appState.gameObjects.elements.forEach(element => {
+    const elementEl = document.createElement('div');
+    elementEl.className = `game-object type-${element.type}`;
+    elementEl.dataset.elementId = element.id;
+    elementEl.dataset.elementType = element.type;
+    elementEl.textContent = element.name;
+    
+    // Устанавливаем стили
+    elementEl.style.position = 'absolute';
+    elementEl.style.left = '0';
+    elementEl.style.top = '0';
+    elementEl.style.width = element.width + 'px';
+    elementEl.style.height = element.height + 'px';
+    elementEl.style.transform = `translate3d(${element.x}px, ${element.y}px, 0)`;
+    
+    // Устанавливаем цвет для кнопки и спавнера
+    if (element.type === 'button') {
+        elementEl.style.backgroundColor = element.color || '#3b82f6';
+    } else if (element.type === 'spawn') {
+        elementEl.style.backgroundColor = element.material === 'metal' ? '#28a745' : '#17a2b8';
+    } else if (element.type === 'sensor') {
+        elementEl.style.backgroundColor = element.sensorType === 'optical' ? '#6c757d' : '#8b0000';
+    }
+    
+    // Добавляем метку тега
+    const tagLabel = document.createElement('div');
+    tagLabel.className = 'game-tag-label';
+    tagLabel.textContent = element.tag || '—';
+    elementEl.appendChild(tagLabel);
+    
+    // Обработчики для перетаскивания и кликов
+    setupElementInteraction(elementEl, element);
+    
+    gameField.appendChild(elementEl);
+});
+        }
+
+        // Настройка взаимодействия с игровыми элементами
+        function setupElementInteraction(elementEl, element) {
+let isDragging = false;
+let dragStartX, dragStartY;
+let elementStartX, elementStartY;
+elementEl.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (appState.simulationRunning) {
+        // В режиме симуляции — только функциональные взаимодействия
+        if (element.type === 'button') {
+            // Логика кнопки в зависимости от типа
+            if (element.buttonType === 'momentary') {
+                // Моментальная кнопка: TRUE при нажатии, FALSE при отжатии
+                appState.tagRegistry.setValue(element.tag, true);
+                elementEl.classList.add('pressed');
+                
+                const releaseHandler = (releaseEvent) => {
+                    appState.tagRegistry.setValue(element.tag, false);
+                    elementEl.classList.remove('pressed');
+                    document.removeEventListener('pointerup', releaseHandler);
+                    document.removeEventListener('pointerleave', releaseHandler);
+                };
+                
+                document.addEventListener('pointerup', releaseHandler);
+                document.addEventListener('pointerleave', releaseHandler);
+            } else if (element.buttonType === 'latched') {
+                // Кнопка с фиксацией: переключение состояния при каждом нажатии
+                const currentValue = appState.tagRegistry.getValue(element.tag);
+                appState.tagRegistry.setValue(element.tag, !currentValue);
+                
+                // Обновляем визуальное состояние
+                elementEl.classList.toggle('active', !currentValue);
+            }
+        }
+        return;
+    }
+    
+    // В режиме STOP — разрешаем drag и редактирование
+    isDragging = false;
+    dragStartX = e.clientX;
+    dragStartY = e.clientY;
+    elementStartX = element.x;
+    elementStartY = element.y;
+    
+    elementEl.setPointerCapture(e.pointerId);
+    
+    const moveHandler = (moveEvent) => {
+        const dx = moveEvent.clientX - dragStartX;
+        const dy = moveEvent.clientY - dragStartY;
+        
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        if (distance > appState.dragState.threshold && !isDragging) {
+            isDragging = true;
+        }
+        
+        if (isDragging) {
+            const fieldBounds = { width: 1200, height: 800 };
+            const newX = Math.max(0, Math.min(fieldBounds.width - element.width, elementStartX + dx));
+            const newY = Math.max(0, Math.min(fieldBounds.height - element.height, elementStartY + dy));
+            
+            element.x = newX;
+            element.y = newY;
+            elementEl.style.transform = `translate3d(${element.x}px, ${element.y}px, 0)`;
+        }
+    };
+    
+    const upHandler = (upEvent) => {
+        elementEl.releasePointerCapture(upEvent.pointerId);
+        document.removeEventListener('pointermove', moveHandler);
+        document.removeEventListener('pointerup', upHandler);
+        document.removeEventListener('pointercancel', upHandler);
+        
+        if (!isDragging) {
+            showGameObjectProperties(element);
+        }
+        
+        isDragging = false;
+    };
+    
+    document.addEventListener('pointermove', moveHandler);
+    document.addEventListener('pointerup', upHandler);
+    document.addEventListener('pointercancel', upHandler);
+});
+        }
+
+        // Показать свойства игрового объекта
+ function showGameObjectProperties(element) {
+// Скрываем все специфичные группы
+document.querySelectorAll('.form-group[id$="Group"]').forEach(group => {
+if (group) group.style.display = 'none';
+});
+// Показываем нужные группы в зависимости от типа
+if (element.type === 'conveyor') {
+    const group = document.getElementById('conveyorInvertGroup');
+    if (group) {
+        group.style.display = 'block';
+        const input = document.getElementById('conveyorInvertTag');
+        if (input) input.value = element.invertTag || '';
+    }
+} else if (element.type === 'button') {
+    const typeGroup = document.getElementById('buttonTypeGroup');
+    const colorGroup = document.getElementById('buttonColorGroup');
+    if (typeGroup) typeGroup.style.display = 'block';
+    if (colorGroup) colorGroup.style.display = 'block';
+    if (document.getElementById('buttonType')) {
+        document.getElementById('buttonType').value = element.buttonType || 'momentary';
+    }
+    if (document.getElementById('buttonColor')) {
+        document.getElementById('buttonColor').value = element.color || '#3b82f6';
+    }
+} else if (element.type === 'spawn') {
+    const group = document.getElementById('spawnerMaterialGroup');
+    if (group) {
+        group.style.display = 'block';
+        const input = document.getElementById('spawnerMaterial');
+        if (input) input.value = element.material || 'metal';
+    }
+} else if (element.type === 'sensor') {
+    const group = document.getElementById('sensorTypeGroup');
+    if (group) {
+        group.style.display = 'block';
+        const input = document.getElementById('sensorType');
+        if (input) input.value = element.sensorType || 'optical';
+    }
+}
+
+// Заполняем общие поля
+const tagInput = document.getElementById('gameObjectTag');
+const nameInput = document.getElementById('gameObjectName');
+const commentInput = document.getElementById('gameObjectComment');
+
+if (tagInput) tagInput.value = element.tag || '';
+if (nameInput) nameInput.value = element.name || '';
+if (commentInput) commentInput.value = element.comment || '';
+
+// Сохраняем элемент для редактирования
+appState.editingElement = element;
+
+const modal = document.getElementById('gameObjectPropertiesModal');
+if (modal) {
+    modal.style.display = 'flex';
+}
+}
+
+        // Сохранение свойств игрового объекта
+        function saveGameObjectProperties() {
+            const element = appState.editingElement;
+if (!element) return;
+            const newTag = document.getElementById('gameObjectTag').value.trim();
+const newName = document.getElementById('gameObjectName').value.trim();
+const newComment = document.getElementById('gameObjectComment').value.trim();
+
+// Валидация тега
+if (!/^[IQM]\w+$/.test(newTag)) {
+    alert('Неверный формат тега. Пример: I0.0, Q1, M10');
+    return;
+}
+
+// Обновляем элемент
+element.tag = newTag;
+element.name = newName;
+element.comment = newComment;
+
+// Обновляем специфичные поля
+if (element.type === 'conveyor') {
+    const invertTagInput = document.getElementById('conveyorInvertTag');
+    if (invertTagInput) {
+        element.invertTag = invertTagInput.value.trim();
+        if (element.invertTag) {
+            // Регистрируем тег инверсии в TagRegistry
+            appState.tagRegistry.register(element.invertTag, 'Q', false, `Инверсия ${element.name}`);
+        }
+    }
+} else if (element.type === 'button') {
+    const typeInput = document.getElementById('buttonType');
+    const colorInput = document.getElementById('buttonColor');
+    if (typeInput) element.buttonType = typeInput.value;
+    if (colorInput) element.color = colorInput.value;
+} else if (element.type === 'spawn') {
+    const materialInput = document.getElementById('spawnerMaterial');
+    if (materialInput) element.material = materialInput.value;
+} else if (element.type === 'sensor') {
+    const typeInput = document.getElementById('sensorType');
+    if (typeInput) element.sensorType = typeInput.value;
+}
+
+// Регистрируем тег в TagRegistry
+appState.tagRegistry.register(newTag, element.type.startsWith('I') ? 'I' : 'Q', false, newComment);
+
+// Закрываем модальное окно
+document.getElementById('gameObjectPropertiesModal').style.display = 'none';
+
+// Обновляем DOM
+syncGameObjectsToDOM();
+}
+
+        // Удаление игрового объекта
+        function deleteGameObject(elementId) {
+            if (!confirm('Удалить элемент?')) return;
+            
+            // Находим элемент в массиве
+            const elementIndex = appState.gameObjects.elements.findIndex(el => el.id === elementId);
+            if (elementIndex !== -1) {
+                const element = appState.gameObjects.elements[elementIndex];
+                
+                // Удаляем из массива
+                appState.gameObjects.elements.splice(elementIndex, 1);
+                
+                // Удаляем из TagRegistry, если тег больше не используется
+                const otherElementsUsingTag = appState.gameObjects.elements.some(el => el.tag === element.tag);
+                if (!otherElementsUsingTag) {
+                    appState.tagRegistry.tags.delete(element.tag);
+                }
+                
+                if (element.invertTag) {
+                    const otherElementsUsingInvert = appState.gameObjects.elements.some(el => el.invertTag === element.invertTag);
+                    if (!otherElementsUsingInvert) {
+                        appState.tagRegistry.tags.delete(element.invertTag);
+                    }
+                }
+                
+                // Удаляем из физических объектов (если есть связанные заготовки)
+                appState.gameObjects.workpieces = appState.gameObjects.workpieces.filter(wp => wp.onConveyorId !== elementId);
+                
+                // Пересоздаём DOM
+                syncGameObjectsToDOM();
+            }
+        }
+
+        // Функции для работы с AABB коллизиями
+        function checkAABB(objA, objB) {
+            return objA.x < objB.x + objB.width && 
+                   objA.x + objA.width > objB.x && 
+                   objA.y < objB.y + objB.height && 
+                   objA.y + objA.height > objB.y;
+        }
+
+        // Физический движок для заготовок
+        const PhysicsEngine = {
+            // Создание новой заготовки
+            createWorkpiece(x, y, material = 'metal') {
+                return {
+                    id: Date.now() + Math.random(),
+                    x: x,
+                    y: y,
+                    vx: 0,
+                    vy: 0,
+                    width: 30,
+                    height: 20,
+                    material: material,
+                    isOnConveyor: false,
+                    activeConveyorId: null,
+                    isSpawned: true,
+                    domElement: null,
+                    debugElement: null
+                };
+            },
+
+            // Обновление физики для одной заготовки
+             updateWorkpiece(workpiece, deltaTime) {
+const fieldBounds = { width: 1200, height: 800 }; // Логические границы поля
+// Находим конвейеры в игровых элементах
+const conveyors = appState.gameObjects.elements.filter(el => el.type === 'conveyor');
+
+// Применяем гравитацию, если не на конвейере
+if (!workpiece.isOnConveyor) {
+    workpiece.vy += appState.gameObjects.gravity * deltaTime;
+}
+
+// Обновляем позицию
+workpiece.x += workpiece.vx * deltaTime;
+workpiece.y += workpiece.vy * deltaTime;
+
+// Ограничение по высоте поля (только нижняя граница)
+if (workpiece.y >= fieldBounds.height - workpiece.height) {
+    workpiece.y = fieldBounds.height - workpiece.height;
+    workpiece.vy = 0;
+    workpiece.isOnConveyor = false;
+    workpiece.activeConveyorId = null;
+}
+
+// Проверяем коллизию с конвейерами
+workpiece.isOnConveyor = false;
+for (const conveyor of conveyors) {
+    // Создаём AABB объекты для проверки
+    const wpBottom = workpiece.y + workpiece.height;
+    const convTop = conveyor.y;
+    const overlapX = workpiece.x + workpiece.width > conveyor.x && workpiece.x < conveyor.x + conveyor.width;
+    const verticalImpact = wpBottom >= convTop && workpiece.y < convTop;
+    
+    if (overlapX && verticalImpact) {
+        // Жёсткая подсадка - заготовка приземляется точно на конвейер
+        workpiece.y = convTop - workpiece.height;
+        workpiece.vy = 0;
+        workpiece.isOnConveyor = true;
+        workpiece.activeConveyorId = conveyor.id;
+        
+        // Движение на конвейере с учётом инверсии
+        const conveyorOn = appState.tagRegistry.getValue(conveyor.tag);
+        const inverted = appState.tagRegistry.getValue(conveyor.invertTag || '');
+        if (conveyorOn) {
+            workpiece.vx = inverted ? -appState.gameObjects.conveyorSpeed : appState.gameObjects.conveyorSpeed;
+        } else {
+            // Плавное замедление
+            workpiece.vx *= appState.gameObjects.friction;
+            if (Math.abs(workpiece.vx) < 1) workpiece.vx = 0;
+        }
+        break; // Только первый конвейер
+    }
+}
+
+// Проверяем датчики
+const sensors = appState.gameObjects.elements.filter(el => el.type === 'sensor');
+for (const sensor of sensors) {
+    const sensorActive = checkAABB(
+        { x: workpiece.x, y: workpiece.y, width: workpiece.width, height: workpiece.height },
+        { x: sensor.x, y: sensor.y, width: sensor.width, height: sensor.height }
+    );
+    
+    // Фильтрация по типу датчика
+    let finalSensorActive = false;
+    if (sensor.sensorType === 'optical') {
+        // Оптический датчик срабатывает для любого материала
+        finalSensorActive = sensorActive;
+    } else if (sensor.sensorType === 'inductive') {
+        // Индуктивный датчик срабатывает только для металла
+        finalSensorActive = sensorActive && workpiece.material === 'metal';
+    }
+    
+    appState.tagRegistry.setValue(sensor.tag, finalSensorActive);
+}
+
+// Проверяем зоны выгрузки
+const unloads = appState.gameObjects.elements.filter(el => el.type === 'unload');
+for (const unload of unloads) {
+    // Триггер срабатывает когда центр заготовки пересекает линию выгрузки
+    const triggerX = unload.x + unload.width / 2;
+    const centerOfWorkpiece = workpiece.x + workpiece.width / 2;
+    
+    if (centerOfWorkpiece >= triggerX && workpiece.y >= unload.y - 50) {
+        // Отправляем сигнал выгрузки
+        appState.tagRegistry.setValue(unload.tag, true);
+        appState.gameObjects.counters.unloadCount++;
+        
+        // Сбрасываем сигнал через 1 тик
+        setTimeout(() => {
+            appState.tagRegistry.setValue(unload.tag, false);
+        }, 0);
+        
+        // Помечаем для удаления
+        workpiece.isSpawned = false;
+        break;
+    }
+}
+
+return workpiece;
+            },
+
+            // Обновление всех заготовок
+            updateAll(deltaTime) {
+                // Обновляем каждую заготовку
+                for (let i = appState.gameObjects.workpieces.length - 1; i >= 0; i--) {
+                    const wp = appState.gameObjects.workpieces[i];
+                    
+                    this.updateWorkpiece(wp, deltaTime);
+                    
+                    // Обновляем DOM-элемент
+                    if (wp.domElement) {
+                        wp.domElement.style.transform = `translate3d(${wp.x}px, ${wp.y}px, 0)`;
+                        
+                        // Обновляем debug-информацию
+                        if (wp.debugElement) {
+                            wp.debugElement.textContent = `v: ${wp.vx.toFixed(1)},${wp.vy.toFixed(1)}`;
+                        }
+                    }
+                    
+                    // Удаляем заготовки, которые вышли за пределы
+                    if (!wp.isSpawned) {
+                        if (wp.domElement) {
+                            wp.domElement.remove();
+                        }
+                        if (wp.debugElement) {
+                            wp.debugElement.remove();
+                        }
+                        appState.gameObjects.workpieces.splice(i, 1);
+                    }
+                }
+            }
+        };
+
+        // Вычисление LD-логики с корректной обработкой ветвлений и НЗ-контактов
+        function evaluateLDLogic() {
+            // Сначала сбрасываем состояния всех катушек
+            for (const rung of appState.rungs) {
+                for (const branch of rung.branches) {
+                    for (const element of branch.elements) {
+                        if (element.type === 'coil') {
+                            element.state = false;
+                        }
+                    }
+                }
+            }
+
+            // Вычисляем каждую линию
+            for (const rung of appState.rungs) {
+                // Используем стек для отслеживания потоков мощности при ветвлении
+                const flowStack = [];
+                let currentFlow = true;
+
+                // Сначала вычисляем все ветки (параллельные пути)
+                const branchResults = [];
+                for (const branch of rung.branches) {
+                    let branchFlow = true;
+
+                    // Вычисляем элементы в ветке (последовательность = логическое И)
+                    for (const element of branch.elements) {
+                        let elementValue = false;
+
+                        if (element.type.startsWith('contact')) {
+                            // Получаем effectiveValue из тега
+                            const inputValue = appState.tagRegistry.getValue(element.tag) || false;
+
+                            if (element.type === 'contact-normally-open') {
+                                elementValue = inputValue;
+                            } else if (element.type === 'contact-normally-closed') {
+                                // НЗ-контакт: инвертирует значение (TRUE → FALSE, FALSE → TRUE)
+                                elementValue = !inputValue;
+                            }
+                        } else if (element.type === 'coil') {
+                            // Для катушек пропускаем вычисление здесь
+                            continue;
+                        }
+
+                        branchFlow = branchFlow && elementValue;
+                    }
+
+                    branchResults.push(branchFlow);
+                }
+
+                // Объединяем результаты веток через логическое ИЛИ
+                let rungResult = false;
+                for (const result of branchResults) {
+                    rungResult = rungResult || result;
+                }
+
+                // Теперь проверяем элементы, которые идут после точки слияния (если есть)
+                // В текущей архитектуре это будут элементы в главной ветке rung.mainElements
+                if (rung.mainElements && rung.mainElements.length > 0) {
+                    // Применяем результат веток к основному потоку
+                    currentFlow = rungResult;
+
+                    // Вычисляем элементы после точки слияния
+                    for (const element of rung.mainElements) {
+                        let elementValue = false;
+
+                        if (element.type.startsWith('contact')) {
+                            // Получаем effectiveValue из тега
+                            const inputValue = appState.tagRegistry.getValue(element.tag) || false;
+
+                            if (element.type === 'contact-normally-open') {
+                                elementValue = inputValue;
+                            } else if (element.type === 'contact-normally-closed') {
+                                // НЗ-контакт после ветвления: инвертирует значение
+                                elementValue = !inputValue;
+                            }
+                        } else if (element.type === 'coil') {
+                            // Для катушек применяем финальный результат
+                            element.state = currentFlow && elementValue;
+                            continue;
+                        }
+
+                        currentFlow = currentFlow && elementValue;
+                    }
+
+                    // Применяем финальный результат к катушке
+                    for (const branch of rung.branches) {
+                        for (const element of branch.elements) {
+                            if (element.type === 'coil' && element.tag) {
+                                element.state = currentFlow;
+                                // Устанавливаем baseValue для катушки, не перезаписывая override
+                                if (!appState.tagRegistry.getTagInfo(element.tag)?.isOverridden) {
+                                    appState.tagRegistry.setValue(element.tag, currentFlow);
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // Без элементов после слияния - просто применяем результат веток
+                    for (const branch of rung.branches) {
+                        for (const element of branch.elements) {
+                            if (element.type === 'coil' && element.tag) {
+                                element.state = rungResult;
+                                // Устанавливаем baseValue для катушки, не перезаписывая override
+                                if (!appState.tagRegistry.getTagInfo(element.tag)?.isOverridden) {
+                                    appState.tagRegistry.setValue(element.tag, rungResult);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Исправленный игровой движок с корректным drag-окном
+        const GameEngine = {
+            window: null,
+            header: null,
+            field: null,
+            isWindowDragging: false,
+            dragOffsetX: 0,
+            dragOffsetY: 0,
+            
+            init() {
+                this.window = document.getElementById('gameWindow');
+                this.header = document.getElementById('gameHeader');
+                this.field = document.getElementById('gameField');
+                
+                // Устанавливаем начальную позицию окна через JS
+                appState.ui.windowX = (window.innerWidth - 450) / 2;
+                appState.ui.windowY = (window.innerHeight - 400) / 2;
+                
+                // Обновляем CSS-переменные
+                document.documentElement.style.setProperty('--win-x', `${appState.ui.windowX}px`);
+                document.documentElement.style.setProperty('--win-y', `${appState.ui.windowY}px`);
+
+                this.setupWindowDrag();
+                this.setupZoomHandlers();
+            },
+
+            setupWindowDrag() {
+                this.header.addEventListener('pointerdown', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation(); // Останавливаем всплытие
+                    this.isWindowDragging = true;
+                    
+                    // Вычисляем смещение курсора относительно левого верхнего угла окна
+                    const rect = this.window.getBoundingClientRect();
+                    this.dragOffsetX = e.clientX - rect.left;
+                    this.dragOffsetY = e.clientY - rect.top;
+                    
+                    // Захватываем указатель
+                    this.header.setPointerCapture(e.pointerId);
+                });
+
+                document.addEventListener('pointermove', (e) => {
+                    if (this.isWindowDragging) {
+                        // Вычисляем новые координаты окна
+                        const newX = e.clientX - this.dragOffsetX;
+                        const newY = e.clientY - this.dragOffsetY;
+                        
+                        // Обновляем состояние
+                        appState.ui.windowX = newX;
+                        appState.ui.windowY = newY;
+                        
+                        // Обновляем CSS-переменные для плавного рендеринга
+                        document.documentElement.style.setProperty('--win-x', `${newX}px`);
+                        document.documentElement.style.setProperty('--win-y', `${newY}px`);
+                    }
+                });
+
+                document.addEventListener('pointerup', (e) => {
+                    if (this.isWindowDragging) {
+                        this.isWindowDragging = false;
+                        try {
+                            this.header.releasePointerCapture(e.pointerId);
+                        } catch (err) {
+                            // Игнорируем ошибку если capture уже released
+                        }
+                    }
+                });
+
+                document.addEventListener('pointercancel', (e) => {
+                    if (this.isWindowDragging) {
+                        this.isWindowDragging = false;
+                        try {
+                            this.header.releasePointerCapture(e.pointerId);
+                        } catch (err) {
+                            // Игнорируем ошибку если capture уже released
+                        }
+                    }
+                });
+            },
+
+            setupZoomHandlers() {
+                // Zoom через колесо мыши
+                this.field.addEventListener('wheel', (e) => {
+                    e.preventDefault();
+                    const delta = e.deltaY > 0 ? -0.1 : 0.1;
+                    const newZoom = Math.min(Math.max(0.3, appState.ui.zoom + delta), 3.0);
+                    
+                    appState.ui.zoom = newZoom;
+                    document.documentElement.style.setProperty('--field-zoom', newZoom.toString());
+                });
+
+                // Pan через drag на пустом месте
+                this.field.addEventListener('pointerdown', (e) => {
+                    if (e.target === this.field) {
+                        const startX = e.clientX;
+                        const startY = e.clientY;
+                        const startPanX = appState.ui.panX;
+                        const startPanY = appState.ui.panY;
+                        
+                        const moveHandler = (moveEvent) => {
+                            const dx = moveEvent.clientX - startX;
+                            const dy = moveEvent.clientY - startY;
+                            
+                            appState.ui.panX = startPanX + dx;
+                            appState.ui.panY = startPanY + dy;
+                            
+                            document.documentElement.style.setProperty('--field-pan-x', `${appState.ui.panX}px`);
+                            document.documentElement.style.setProperty('--field-pan-y', `${appState.ui.panY}px`);
+                        };
+
+                        const upHandler = () => {
+                            document.removeEventListener('pointermove', moveHandler);
+                            document.removeEventListener('pointerup', upHandler);
+                        };
+
+                        document.addEventListener('pointermove', moveHandler);
+                        document.addEventListener('pointerup', upHandler);
+                    }
+                });
+            },
+
+            update() {
+                // Проверяем фронт спавна для каждого спавнера
+                const spawns = appState.gameObjects.elements.filter(el => el.type === 'spawn');
+                for (const spawn of spawns) {
+                    const spawnOn = appState.tagRegistry.getValue(spawn.tag);
+                    const prevSpawnOn = appState.gameObjects.previousValues.spawn[spawn.id] || false;
+                    
+                    if (spawnOn && !prevSpawnOn) {
+                        // Создаём новую заготовку в логических координатах спавнера
+                        // Точная математика спавна: центр спавнера минус половина ширины заготовки
+                        const spawnX = spawn.x + spawn.width / 2 - 15; // Центр по X
+                        const spawnY = spawn.y - 25; // Чуть выше по Y
+                        
+                        const newWorkpiece = PhysicsEngine.createWorkpiece(spawnX, spawnY, spawn.material);
+                        
+                        // Создаём DOM-элемент для рендера
+                        const wpElement = document.createElement('div');
+                        wpElement.className = `workpiece ${newWorkpiece.material}`;
+                        wpElement.style.transform = `translate3d(${newWorkpiece.x}px, ${newWorkpiece.y}px, 0)`;
+                        
+                        // Добавляем debug-информацию (опционально)
+                        const debugElement = document.createElement('div');
+                        debugElement.className = 'workpiece-debug';
+                        debugElement.textContent = `v: ${newWorkpiece.vx.toFixed(1)},${newWorkpiece.vy.toFixed(1)}`;
+                        wpElement.appendChild(debugElement);
+                        
+                        document.getElementById('workpiecesContainer').appendChild(wpElement);
+                        
+                        // Привязываем DOM-элемент к физическому объекту
+                        newWorkpiece.domElement = wpElement;
+                        newWorkpiece.debugElement = debugElement;
+                        
+                        // Добавляем в массив
+                        appState.gameObjects.workpieces.push(newWorkpiece);
+                    }
+                    
+                    appState.gameObjects.previousValues.spawn[spawn.id] = spawnOn;
+                }
+                
+                // Обновляем физику
+                PhysicsEngine.updateAll(appState.physics.step);
+            },
+
+            render() {
+                // Обновляем transform игрового поля
+                document.documentElement.style.setProperty('--field-pan-x', `${appState.ui.panX}px`);
+                document.documentElement.style.setProperty('--field-pan-y', `${appState.ui.panY}px`);
+                document.documentElement.style.setProperty('--field-zoom', appState.ui.zoom.toString());
+                
+                // Обновляем анимацию конвейеров
+                this.updateConveyorAnimations();
+                
+                // Рендерим debug-оверлей
+                this.renderDebugOverlay();
+            },
+
+            updateConveyorAnimations() {
+                // Обновляем анимацию для всех конвейеров
+                appState.gameObjects.elements.forEach(element => {
+                    if (element.type === 'conveyor') {
+                        const conveyorEl = document.querySelector(`[data-element-id="${element.id}"]`);
+                        if (conveyorEl) {
+                            const conveyorOn = appState.tagRegistry.getValue(element.tag);
+                            const inverted = appState.tagRegistry.getValue(element.invertTag || '');
+                            
+                            conveyorEl.classList.toggle('running', conveyorOn);
+                            conveyorEl.classList.toggle('inverted', inverted && conveyorOn);
+                        }
+                    }
+                });
+            },
+
+            renderDebugOverlay() {
+                const debugLayer = document.getElementById('debugLayer');
+                debugLayer.innerHTML = '';
+
+                if (!appState.ui.debugVisible) {
+                    debugLayer.style.display = 'none';
+                    return;
+                }
+
+                debugLayer.style.display = 'block';
+
+                // Рендерим коллайдеры для игровых объектов
+                appState.gameObjects.elements.forEach(element => {
+                    const debugBox = document.createElement('div');
+                    debugBox.className = 'debug-box';
+                    debugBox.style.left = element.x + 'px';
+                    debugBox.style.top = element.y + 'px';
+                    debugBox.style.width = element.width + 'px';
+                    debugBox.style.height = element.height + 'px';
+                    debugBox.title = `${element.type} ${element.name} (${element.tag})`;
+                    
+                    debugLayer.appendChild(debugBox);
+                });
+
+                // Рендерим коллайдеры для заготовок
+                appState.gameObjects.workpieces.forEach(wp => {
+                    const debugBox = document.createElement('div');
+                    debugBox.className = 'debug-box';
+                    debugBox.style.left = wp.x + 'px';
+                    debugBox.style.top = wp.y + 'px';
+                    debugBox.style.width = wp.width + 'px';
+                    debugBox.style.height = wp.height + 'px';
+                    debugBox.style.border = '1px solid yellow';
+                    debugBox.style.backgroundColor = 'rgba(255, 255, 0, 0.1)';
+                    debugBox.title = `Workpiece ${wp.id} (${wp.x}, ${wp.y}) ${wp.width}x${wp.height}`;
+                    
+                    debugLayer.appendChild(debugBox);
+                });
+            }
+        };
+
+        // Интегратор симуляции
+        let lastSimulationTime = 0;
+        let animationFrameId = null;
+
+        function simulationLoop(currentTime) {
+            if (!appState.simulationRunning) return;
+
+            // Вычисляем FPS
+            if (lastSimulationTime) {
+                appState.debugInfo.fps = Math.round(1000 / (currentTime - lastSimulationTime));
+                document.getElementById('fpsDisplay').textContent = appState.debugInfo.fps;
+            }
+            lastSimulationTime = currentTime;
+
+            // 1. Сборка состояний входов (из игровых объектов)
+            readPhysicalInputs();
+
+            // 2. Вычисление LD-логики
+            evaluateLDLogic();
+
+            // 3. Применение override не требуется - делается через UI
+
+            // 4. Обновление игрового состояния
+            GameEngine.update();
+
+            // 5. Обновление UI
+            LDEditor.updateElementStates();
+            TagsManager.updateTagsList();
+
+            // 6. Обновление панели отладки
+            updateDebugPanel();
+
+            // 7. Рендер всего
+            GameEngine.render();
+
+            animationFrameId = requestAnimationFrame(simulationLoop);
+        }
+
+        function readPhysicalInputs() {
+            // Виртуальные входы уже обновляются в других местах
+            // Сенсор обновляется в игровом движке через физику
+        }
+
+        function updateDebugPanel() {
+            const debugContent = document.getElementById('debugContent');
+            debugContent.innerHTML = `
+                <div class="debug-item">FPS: ${appState.debugInfo.fps}</div>
+                <div class="debug-item">Конвейер: ${appState.tagRegistry.getValue('Q_CONVEYOR') ? 'ВКЛ' : 'ВЫКЛ'}</div>
+                <div class="debug-item">Спавн: ${appState.tagRegistry.getValue('Q_SPAWN') ? 'ВКЛ' : 'ВЫКЛ'}</div>
+                <div class="debug-item">Сенсор: ${appState.tagRegistry.getValue('X_SENSOR') ? 'АКТИВЕН' : 'НЕТ'}</div>
+                <div class="debug-item">Выгружено: ${appState.gameObjects.counters.unloadCount}</div>
+                <div class="debug-item">Заготовок: ${appState.gameObjects.workpieces.length}</div>
+                <div class="debug-item">Масштаб: ${appState.ui.zoom.toFixed(2)}</div>
+                <div class="debug-item">Объектов: ${appState.gameObjects.elements.length}</div>
+            `;
+        }
+
+        // Работа с LD-редактором
+        const LDEditor = {
+            init() {
+                this.setupDragAndDrop();
+                
+                // Подписываемся на изменения тегов
+                appState.tagRegistry.addChangeListener(() => {
+                    this.updateElementStates();
+                });
+            },
+
+            setupDragAndDrop() {
+                // Обработчики для элементов тулбара
+                document.querySelectorAll('.element-btn[data-type]').forEach(btn => {
+                    btn.addEventListener('dragstart', (e) => {
+                        appState.draggedType = e.target.dataset.type;
+                        e.target.classList.add('dragging');
+                        
+                        // Создаем визуальный "призрак"
+                        const img = document.createElement('img');
+                        img.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="20"><rect width="40" height="20" fill="%23ccc"/></svg>';
+                        e.dataTransfer.setDragImage(img, 20, 10);
+                    });
+
+                    btn.addEventListener('dragend', (e) => {
+                        e.target.classList.remove('dragging');
+                        appState.draggedType = null;
+                    });
+                });
+
+                // Обработчики для ячеек сетки
+                document.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    
+                    if (appState.draggedType) {
+                        const target = e.target.closest('.grid-cell');
+                        if (target && !target.querySelector('.element')) {
+                            target.classList.add('droppable');
+                        }
+                    }
+                });
+
+                document.addEventListener('dragleave', (e) => {
+                    if (e.target.classList.contains('grid-cell')) {
+                        e.target.classList.remove('droppable');
+                    }
+                });
+
+                document.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    
+                    const target = e.target.closest('.grid-cell');
+                    if (target && appState.draggedType) {
+                        target.classList.remove('droppable');
+                        
+                        const rungIndex = parseInt(target.dataset.rung);
+                        const branchIndex = parseInt(target.dataset.branch);
+                        const colIndex = parseInt(target.dataset.col);
+                        
+                        if (rungIndex !== undefined && branchIndex !== undefined && colIndex !== undefined) {
+                            this.addElementToCell(rungIndex, branchIndex, colIndex, appState.draggedType);
+                        }
+                    }
+                });
+
+                // Обработчики для уже размещенных элементов (перестановка и удаление)
+                document.addEventListener('mousedown', (e) => {
+                    const elementDiv = e.target.closest('.element');
+                    if (elementDiv && appState.simulationRunning) {
+                        // Клик по элементу во время симуляции - переключение тега
+                        const parentCell = elementDiv.closest('.grid-cell');
+                        const rungIndex = parseInt(parentCell.dataset.rung);
+                        const branchIndex = parseInt(parentCell.dataset.branch);
+                        const colIndex = parseInt(parentCell.dataset.col);
+                        
+                        if (rungIndex !== undefined && branchIndex !== undefined && colIndex !== undefined) {
+                            const rung = appState.rungs[rungIndex];
+                            const branch = rung.branches[branchIndex];
+                            const element = branch.elements.find(el => el.col === colIndex);
+                            
+                            if (element && element.tag) {
+                                appState.tagRegistry.toggle(element.tag);
+                            }
+                        }
+                    }
+                });
+            },
+
+            addElementToCell(rungIndex, branchIndex, colIndex, type) {
+                if (appState.simulationRunning) return;
+                
+                const newElement = {
+                    id: Date.now(),
+                    type: type,
+                    row: branchIndex,
+                    col: colIndex,
+                    tag: '',
+                    name: '',
+                    state: false,
+                    comment: ''
+                };
+
+                // Открываем модальное окно для ввода свойств
+                appState.editingElement = {
+                    rungIndex,
+                    branchIndex,
+                    colIndex,
+                    element: newElement
+                };
+                
+                this.showElementPropertiesModal(newElement);
+            },
+
+            showElementPropertiesModal(element) {
+                document.getElementById('elementTag').value = element.tag || '';
+                document.getElementById('elementType').value = element.tag ? element.tag.charAt(0) : '';
+                document.getElementById('elementComment').value = element.comment || '';
+                document.getElementById('elementPropertiesModal').style.display = 'flex';
+            },
+
+            hideElementPropertiesModal() {
+                document.getElementById('elementPropertiesModal').style.display = 'none';
+            },
+
+            saveElementProperties() {
+                const tag = document.getElementById('elementTag').value.trim();
+                const type = document.getElementById('elementType').value;
+                const comment = document.getElementById('elementComment').value.trim();
+                
+                if (tag && appState.editingElement) {
+                    const { rungIndex, branchIndex, colIndex, element } = appState.editingElement;
+                    
+                    // Валидация тега
+                    if (!/^[IQM]\w+$/.test(tag)) {
+                        alert('Неверный формат тега. Пример: I0.0, Q1, M10');
+                        return;
+                    }
+                    
+                    // Обновляем элемент
+                    element.tag = tag;
+                    element.comment = comment;
+                    
+                    // Регистрируем тег в реестре, если его нет
+                    appState.tagRegistry.register(tag, type, false, comment);
+                    
+                    // Добавляем элемент в ветку
+                    const rung = appState.rungs[rungIndex];
+                    const branch = rung.branches[branchIndex];
+                    
+                    // Проверяем, есть ли уже элемент в этой ячейке
+                    const existingIndex = branch.elements.findIndex(el => el.col === colIndex);
+                    if (existingIndex !== -1) {
+                        branch.elements[existingIndex] = element;
+                    } else {
+                        branch.elements.push(element);
+                    }
+                    
+                    // Сортируем элементы по колонке
+                    branch.elements.sort((a, b) => a.col - b.col);
+                    
+                    this.hideElementPropertiesModal();
+                    this.render();
+                    TagsManager.updateTagsList();
+                }
+            },
+
+            render() {
+                const container = document.getElementById('editorGrid');
+                container.innerHTML = '';
+                
+                appState.rungs.forEach((rung, rungIndex) => {
+                    const rungDiv = document.createElement('div');
+                    rungDiv.className = 'rung-container';
+                    rungDiv.innerHTML = `
+                        <div class="rung-header">
+                            <span>Линия ${rungIndex + 1}</span>
+                            <button onclick="LDEditor.deleteRung(${rungIndex})" class="btn" style="padding: 4px 8px;">Удалить</button>
+                        </div>
+                    `;
+                    
+                    rung.branches.forEach((branch, branchIndex) => {
+                        const branchDiv = document.createElement('div');
+                        branchDiv.className = 'branch-container';
+                        
+                        // Левая шина
+                        const leftRail = document.createElement('div');
+                        leftRail.className = 'rail';
+                        leftRail.style.height = '40px';
+                        
+                        // Контент ветки
+                        const contentDiv = document.createElement('div');
+                        contentDiv.className = 'branch-content';
+                        
+                        // Создаем ячейки для элементов
+                        for (let col = 0; col < 15; col++) {
+                            const cell = document.createElement('div');
+                            cell.className = 'grid-cell';
+                            cell.dataset.rung = rungIndex;
+                            cell.dataset.branch = branchIndex;
+                            cell.dataset.col = col;
+                            
+                            // Проверяем, есть ли элемент в этой ячейке
+                            const element = branch.elements.find(el => el.col === col);
+                            if (element) {
+                                const elementDiv = document.createElement('div');
+                                elementDiv.className = `element ${element.type}`;
+                                
+                                // Обновляем состояние элемента на основе тега
+                                if (element.tag) {
+                                    const tagInfo = appState.tagRegistry.getTagInfo(element.tag);
+                                    if (tagInfo) {
+                                        if (tagInfo.effectiveValue) {
+                                            elementDiv.classList.add('active');
+                                        }
+                                        if (tagInfo.isOverridden) {
+                                            elementDiv.classList.add('override');
+                                        }
+                                    }
+                                }
+                                
+                                // Обработчик клика для редактирования
+                                elementDiv.addEventListener('click', (e) => {
+                                    e.stopPropagation();
+                                    appState.editingElement = {
+                                        rungIndex,
+                                        branchIndex,
+                                        colIndex: col,
+                                        element: element
+                                    };
+                                    this.showElementPropertiesModal(element);
+                                });
+                                
+                                // Кнопка удаления
+                                const deleteBtn = document.createElement('button');
+                                deleteBtn.className = 'element-delete-btn';
+                                deleteBtn.textContent = '×';
+                                deleteBtn.onclick = (e) => {
+                                    e.stopPropagation();
+                                    this.deleteElement(rungIndex, branchIndex, col);
+                                };
+                                elementDiv.appendChild(deleteBtn);
+                                
+                                // Тег элемента
+                                if (element.tag) {
+                                    const tagSpan = document.createElement('div');
+                                    tagSpan.className = 'element-tag';
+                                    tagSpan.textContent = element.tag;
+                                    elementDiv.appendChild(tagSpan);
+                                }
+                                
+                                cell.appendChild(elementDiv);
+                            } else {
+                                // Ячейка пустая - может принимать перетаскивание
+                                cell.addEventListener('dragover', (e) => {
+                                    e.preventDefault();
+                                    if (appState.draggedType) {
+                                        cell.classList.add('droppable');
+                                    }
+                                });
+                                
+                                cell.addEventListener('dragleave', (e) => {
+                                    cell.classList.remove('droppable');
+                                });
+                                
+                                cell.addEventListener('drop', (e) => {
+                                    e.preventDefault();
+                                    cell.classList.remove('droppable');
+                                    
+                                    if (appState.draggedType) {
+                                        this.addElementToCell(rungIndex, branchIndex, col, appState.draggedType);
+                                    }
+                                });
+                            }
+                            
+                            contentDiv.appendChild(cell);
+                        }
+                        
+                        // Правая шина
+                        const rightRail = document.createElement('div');
+                        rightRail.className = 'rail';
+                        rightRail.style.height = '40px';
+                        
+                        branchDiv.appendChild(leftRail);
+                        branchDiv.appendChild(contentDiv);
+                        branchDiv.appendChild(rightRail);
+                        rungDiv.appendChild(branchDiv);
+                    });
+                    
+                    // Кнопка добавления ветки
+                    const addBranchBtn = document.createElement('button');
+                    addBranchBtn.className = 'btn';
+                    addBranchBtn.style.marginTop = '5px';
+                    addBranchBtn.textContent = '+ Добавить ветку';
+                    addBranchBtn.onclick = () => LDEditor.addBranch(rungIndex);
+                    rungDiv.appendChild(addBranchBtn);
+                    
+                    container.appendChild(rungDiv);
+                });
+            },
+
+            deleteElement(rungIndex, branchIndex, colIndex) {
+                if (appState.simulationRunning || !confirm('Удалить элемент?')) return;
+                
+                const rung = appState.rungs[rungIndex];
+                const branch = rung.branches[branchIndex];
+                
+                // Удаляем элемент из массива
+                const elementIndex = branch.elements.findIndex(el => el.col === colIndex);
+                if (elementIndex !== -1) {
+                    branch.elements.splice(elementIndex, 1);
+                }
+                
+                this.render();
+            },
+
+            addBranch(rungIndex) {
+                if (appState.simulationRunning) return;
+                
+                const newBranch = {
+                    id: Date.now(),
+                    startIndex: 0,
+                    elements: []
+                };
+                appState.rungs[rungIndex].branches.push(newBranch);
+                this.render();
+            },
+
+            deleteRung(rungIndex) {
+                if (appState.simulationRunning || !confirm('Удалить линию?')) return;
+                
+                appState.rungs.splice(rungIndex, 1);
+                this.render();
+            },
+
+            updateElementStates() {
+                // Обновляем состояния всех элементов на основе тегов
+                appState.rungs.forEach(rung => {
+                    rung.branches.forEach(branch => {
+                        branch.elements.forEach(element => {
+                            if (element.tag) {
+                                const tagInfo = appState.tagRegistry.getTagInfo(element.tag);
+                                if (tagInfo) {
+                                    element.state = tagInfo.effectiveValue;
+                                }
+                            }
+                        });
+                    });
+                });
+                
+                // Перерисовываем
+                this.render();
+            }
+        };
+
+        // Менеджер тегов
+        const TagsManager = {
+            updateTagsList() {
+                const container = document.getElementById('tagsBody');
+                container.innerHTML = '';
+                
+                for (const [tag, info] of appState.tagRegistry.tags) {
+                    const row = document.createElement('div');
+                    row.className = 'tag-row';
+                    row.onclick = () => appState.tagRegistry.toggle(tag);
+                    
+                    const infoDiv = document.createElement('div');
+                    infoDiv.className = 'tag-info';
+                    
+                    // Определяем класс для отображения состояния
+                    let valueClass = info.effectiveValue ? 'true' : 'false';
+                    if (info.isOverridden) {
+                        valueClass += ' override';
+                    }
+                    
+                    infoDiv.innerHTML = `
+                        <div>${tag}</div>
+                        <div><small>${info.type}: ${info.comment}</small></div>
+                        <div class="tag-value ${valueClass}">${info.effectiveValue ? 'TRUE' : 'FALSE'}</div>
+                    `;
+                    
+                    const actionsDiv = document.createElement('div');
+                    actionsDiv.className = 'tag-actions';
+                    
+                    const invertBtn = document.createElement('button');
+                    invertBtn.className = 'btn';
+                    invertBtn.textContent = '🔄';
+                    invertBtn.title = 'Инвертировать';
+                    invertBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        appState.tagRegistry.toggle(tag);
+                        this.updateTagsList();
+                    };
+                    
+                    const resetBtn = document.createElement('button');
+                    resetBtn.className = 'btn';
+                    resetBtn.textContent = '↺';
+                    resetBtn.title = 'Сбросить override';
+                    resetBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        appState.tagRegistry.setOverride(tag, false);
+                        this.updateTagsList();
+                    };
+                    
+                    const removeBtn = document.createElement('button');
+                    removeBtn.className = 'btn';
+                    removeBtn.textContent = '❌';
+                    removeBtn.title = 'Удалить';
+                    removeBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        this.removeTag(tag);
+                    };
+                    
+                    actionsDiv.appendChild(invertBtn);
+                    actionsDiv.appendChild(resetBtn);
+                    actionsDiv.appendChild(removeBtn);
+                    
+                    row.appendChild(infoDiv);
+                    row.appendChild(actionsDiv);
+                    container.appendChild(row);
+                }
+            },
+
+            removeTag(tag) {
+                if (confirm(`Удалить тег ${tag}?`)) {
+                    appState.tagRegistry.tags.delete(tag);
+                    this.updateTagsList();
+                }
+            },
+
+            toggle() {
+                const manager = document.getElementById('tagsManager');
+                manager.classList.toggle('open');
+            }
+        };
+
+        // UI обработчики
+        function setupEventListeners() {
+            // Кнопка Start/Stop
+            document.getElementById('startBtn').addEventListener('click', () => {
+                appState.simulationRunning = !appState.simulationRunning;
+
+                const btn = document.getElementById('startBtn');
+                const indicator = document.querySelector('.status-indicator');
+
+                if (appState.simulationRunning) {
+                    btn.textContent = '■ STOP';
+                    btn.classList.add('active');
+                    indicator.className = 'status-indicator status-running';
+
+                    lastSimulationTime = performance.now();
+                    animationFrameId = requestAnimationFrame(simulationLoop);
+                } else {
+                    btn.textContent = '▶ START';
+                    btn.classList.remove('active');
+                    indicator.className = 'status-indicator status-stopped';
+
+                    if (animationFrameId) {
+                        cancelAnimationFrame(animationFrameId);
+                        animationFrameId = null;
+                    }
+
+                    // Сбросим состояния при остановке
+                    resetOutputs();
+                }
+            });
+
+            // Добавление новой линии
+            document.getElementById('addRungBtn').addEventListener('click', () => {
+                if (appState.simulationRunning) return;
+                
+                appState.rungs.push({
+                    id: Date.now(),
+                    branches: [{
+                        id: Date.now() + 1,
+                        startIndex: 0,
+                        elements: []
+                    }]
+                });
+                LDEditor.render();
+            });
+
+            // Очистка схемы
+            document.getElementById('clearBtn').addEventListener('click', () => {
+                if (appState.simulationRunning || !confirm('Очистить всю схему?')) return;
+                
+                appState.rungs = [];
+                initializeSchema();
+                initGameObjects(); // Обязательно пересоздаём игровые объекты
+                LDEditor.render();
+                TagsManager.updateTagsList();
+            });
+
+            // Модальное окно свойств
+            document.getElementById('saveElementBtn').addEventListener('click', () => {
+                LDEditor.saveElementProperties();
+            });
+
+            document.getElementById('cancelElementBtn').addEventListener('click', () => {
+                LDEditor.hideElementPropertiesModal();
+            });
+
+            document.getElementById('elementPropertiesModal').addEventListener('click', (e) => {
+                if (e.target.id === 'elementPropertiesModal') {
+                    LDEditor.hideElementPropertiesModal();
+                }
+            });
+
+            // Модальное окно игровых объектов
+            document.getElementById('saveGameObjectBtn').addEventListener('click', () => {
+                saveGameObjectProperties();
+            });
+
+            document.getElementById('cancelGameObjectBtn').addEventListener('click', () => {
+                document.getElementById('gameObjectPropertiesModal').style.display = 'none';
+            });
+
+            document.getElementById('deleteGameObjectBtn').addEventListener('click', () => {
+                if (appState.editingElement) {
+                    deleteGameObject(appState.editingElement.id);
+                    document.getElementById('gameObjectPropertiesModal').style.display = 'none';
+                }
+            });
+
+            document.getElementById('gameObjectPropertiesModal').addEventListener('click', (e) => {
+                if (e.target.id === 'gameObjectPropertiesModal') {
+                    document.getElementById('gameObjectPropertiesModal').style.display = 'none';
+                }
+            });
+
+            // Менеджер тегов
+            document.getElementById('tagsManagerBtn').addEventListener('click', () => {
+                TagsManager.toggle();
+            });
+
+            document.getElementById('closeTagsBtn').addEventListener('click', () => {
+                TagsManager.toggle();
+            });
+
+            // Палитра игровых элементов
+            document.getElementById('gamePaletteBtn').addEventListener('click', () => {
+                document.getElementById('gamePalette').classList.add('open');
+            });
+
+            document.getElementById('closePaletteBtn').addEventListener('click', () => {
+                document.getElementById('gamePalette').classList.remove('open');
+            });
+
+            // Кнопки в палитре
+            document.querySelectorAll('.game-object-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    addGameObject(btn.dataset.type);
+                    document.getElementById('gamePalette').classList.remove('open');
+                });
+            });
+
+            // Обработчики для окна игры
+            document.getElementById('gameCollapseBtn').addEventListener('click', () => {
+                const windowEl = document.getElementById('gameWindow');
+                const collapsed = !appState.gameObjects.window.collapsed;
+                appState.gameObjects.window.collapsed = collapsed;
+                
+                if (collapsed) {
+                    windowEl.style.height = '32px';
+                } else {
+                    windowEl.style.height = '400px';
+                }
+            });
+
+            document.getElementById('gameCloseBtn').addEventListener('click', () => {
+                document.getElementById('gameWindow').style.display = 'none';
+            });
+
+            // Кнопки масштабирования
+            document.getElementById('zoomInBtn').addEventListener('click', () => {
+                const newZoom = Math.min(appState.ui.zoom + 0.1, 3.0);
+                appState.ui.zoom = newZoom;
+                document.documentElement.style.setProperty('--field-zoom', newZoom.toString());
+            });
+
+            document.getElementById('zoomOutBtn').addEventListener('click', () => {
+                const newZoom = Math.max(appState.ui.zoom - 0.1, 0.3);
+                appState.ui.zoom = newZoom;
+                document.documentElement.style.setProperty('--field-zoom', newZoom.toString());
+            });
+
+            document.getElementById('resetViewBtn').addEventListener('click', () => {
+                appState.ui.zoom = 1;
+                appState.ui.panX = 0;
+                appState.ui.panY = 0;
+                
+                document.documentElement.style.setProperty('--field-zoom', '1');
+                document.documentElement.style.setProperty('--field-pan-x', '0px');
+                document.documentElement.style.setProperty('--field-pan-y', '0px');
+            });
+
+            // Кнопка debug-оверлея
+            document.getElementById('debugOverlayBtn').addEventListener('click', () => {
+                appState.ui.debugVisible = !appState.ui.debugVisible;
+                document.getElementById('debugLayer').style.display = appState.ui.debugVisible ? 'block' : 'none';
+            });
+
+            // Клавиатурные сокращения
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'd' || e.key === 'D') {
+                    appState.ui.debugVisible = !appState.ui.debugVisible;
+                    document.getElementById('debugLayer').style.display = appState.ui.debugVisible ? 'block' : 'none';
+                }
+            });
+        }
+
+        function addGameObject(type) {
+            const id = `${type}_${Date.now()}`;
+            let element = null;
+            
+            // Определяем параметры для разных типов
+            switch(type) {
+                case 'conveyor':
+                    element = {
+                        id: id,
+                        type: 'conveyor',
+                        x: 100 + (appState.gameObjects.elements.filter(el => el.type === 'conveyor').length * 10),
+                        y: 400,
+                        width: 300,
+                        height: 24,
+                        tag: `Q_CONVEYOR_${Date.now()}`,
+                        invertTag: `Q_INV_${Date.now()}`, // Второй тег для инверсии
+                        name: 'Конвейер',
+                        comment: 'Конвейерная лента'
+                    };
+                    break;
+                case 'spawn':
+                    element = {
+                        id: id,
+                        type: 'spawn',
+                        x: 100 + (appState.gameObjects.elements.filter(el => el.type === 'spawn').length * 10),
+                        y: 100,
+                        width: 80,
+                        height: 40,
+                        tag: `Q_SPAWN_${Date.now()}`,
+                        name: 'Спавн',
+                        material: 'metal',
+                        comment: 'Зона спавна заготовок'
+                    };
+                    break;
+                case 'sensor':
+                    element = {
+                        id: id,
+                        type: 'sensor',
+                        x: 250 + (appState.gameObjects.elements.filter(el => el.type === 'sensor').length * 10),
+                        y: 390,
+                        width: 40,
+                        height: 20,
+                        tag: `X_SENSOR_${Date.now()}`,
+                        name: 'Сенсор',
+                        sensorType: 'optical',
+                        comment: 'Датчик на конвейере'
+                    };
+                    break;
+                case 'unload':
+                    element = {
+                        id: id,
+                        type: 'unload',
+                        x: 450 + (appState.gameObjects.elements.filter(el => el.type === 'unload').length * 10),
+                        y: 390,
+                        width: 80,
+                        height: 30,
+                        tag: `Q_UNLOAD_${Date.now()}`,
+                        name: 'Выгрузка',
+                        comment: 'Зона выгрузки'
+                    };
+                    break;
+                case 'button':
+                    element = {
+                        id: id,
+                        type: 'button',
+                        x: 300 + (appState.gameObjects.elements.filter(el => el.type === 'button').length * 50),
+                        y: 100,
+                        width: 48,
+                        height: 48,
+                        tag: `I_BTN_${Date.now()}`,
+                        name: 'Кнопка',
+                        buttonType: 'momentary',
+                        color: '#3b82f6',
+                        comment: 'Управляющая кнопка'
+                    };
+                    break;
+            }
+            
+            if (element) {
+                appState.gameObjects.elements.push(element);
+                syncGameObjectsToDOM();
+                
+                // Регистрируем теги в TagRegistry
+                appState.tagRegistry.register(element.tag, 'Q', false, `${type.toUpperCase()} ${id}`);
+                if (element.invertTag) {
+                    appState.tagRegistry.register(element.invertTag, 'Q', false, `Инверсия ${type} ${id}`);
+                }
+            }
+        }
+
+        function resetOutputs() {
+            // Сбросим все выходные теги
+            for (const [tag, info] of appState.tagRegistry.tags) {
+                if (tag.startsWith('Q_')) {
+                    appState.tagRegistry.setValue(tag, false);
+                }
+            }
+
+            // Сбросим состояния катушек
+            for (const rung of appState.rungs) {
+                for (const branch of rung.branches) {
+                    for (const element of branch.elements) {
+                        if (element.type === 'coil') {
+                            element.state = false;
+                        }
+                    }
+                }
+            }
+
+            // Сбросим override
+            for (const [tag, info] of appState.tagRegistry.tags) {
+                if (info.isOverridden) {
+                    appState.tagRegistry.setOverride(tag, false);
+                }
+            }
+
+            // Сбросим заготовки
+            appState.gameObjects.workpieces.forEach(wp => {
+                if (wp.domElement) wp.domElement.remove();
+                if (wp.debugElement) wp.debugElement.remove();
+            });
+            appState.gameObjects.workpieces = [];
+
+            // Обновим интерфейс
+            LDEditor.render();
+            TagsManager.updateTagsList();
+        }
+
+        // Инициализация приложения
+        function initApp() {
+            initializeSchema();
+            initGameObjects(); // Обязательно вызываем инициализацию игровых объектов
+            LDEditor.init();
+            GameEngine.init();
+            setupEventListeners();
+            
+            LDEditor.render();
+            TagsManager.updateTagsList();
+        }
+
+        // Запуск приложения при загрузке
+        window.addEventListener('load', initApp);
+    </script>
+</body>
+</html>
